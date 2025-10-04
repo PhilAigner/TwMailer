@@ -14,6 +14,7 @@ using namespace std;
 #define SERVER_IP "127.0.0.1"
 #define BUFFER_SIZE 1024
 #define BACKLOG 10
+#define ACK "ACK"
 
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
 
@@ -46,6 +47,10 @@ void signal_handler(int signal_number) {
 }
 
 
+void handle_mail() {
+    cout << "Hier könnte die Mail-Funktionalität implementiert werden." << endl;
+}
+
 
 // Funktion zur Behandlung einer Client-Verbindung (für Thread)
 void handle_client(int client_socket, sockaddr_in client_addr) {
@@ -59,11 +64,12 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
 
     if (bytes_received > 0) {
         cout << "Nachricht empfangen: " << buffer << endl;
-        const char* response = "Nachricht erhalten!";
-        if (sendall(client_socket, response, strlen(response)) == -1) {
-            cerr << "Fehler beim Senden der Antwort" << endl;
+        if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
+            cerr << "Fehler beim Senden der ACK-Antwort" << endl;
         } else {
-            cout << "Antwort gesendet" << endl;
+            cout << "ACK-Antwort gesendet" << endl;
+
+            handle_mail();
         }
     } else if (bytes_received == 0) {
         cout << "Client hat die Verbindung geschlossen" << endl;
