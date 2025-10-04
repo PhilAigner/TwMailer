@@ -16,7 +16,7 @@ string server_response = "ACK";
 
 
 void handle_mail() {
-	cout << "Hier könnte die Mail-Funktionalität implementiert werden." << endl;
+	cout << "Hier muss die Mail-Funktionalität implementiert werden." << endl;
 }
 
 

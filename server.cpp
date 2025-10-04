@@ -11,10 +11,12 @@ using namespace std;
 
 // Konfigurationsvariablen
 #define SERVER_PORT 8080
+#define MAIL_SPOOL_DIR "./mailspool"
 #define SERVER_IP "127.0.0.1"
 #define BUFFER_SIZE 1024
 #define BACKLOG 10
 #define ACK "ACK"
+#define ERR "ERR"
 
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
 
@@ -47,8 +49,50 @@ void signal_handler(int signal_number) {
 }
 
 
-void handle_mail() {
+void handle_mail(int client_socket, char* buffer) {
+    bool is_logged_in = false;
+    bool is_running = true;
+
     cout << "Hier könnte die Mail-Funktionalität implementiert werden." << endl;
+
+    while (is_running) {
+        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+
+        if (bytes_received > 0) {
+            cout << "Got the following: " << buffer << endl;
+
+            if (!is_logged_in) {
+                // Beispiel: Einfaches Login-Handling
+                if (strncmp(buffer, "LOGIN ", 6) == 0) {
+                    is_logged_in = true;
+                    cout << "User logged in." << endl;
+                } else {
+                    sendall(client_socket, ERR, strlen(ERR));
+                    continue; // Nächste Iteration, ohne ACK zu senden
+                }
+            }
+
+            //USER MUSS FÜR JEDEN BEFEHL EINGELOGGT SEIN!
+            if (is_logged_in) {
+
+                if (strncmp(buffer, "CMD", 6) == 0) {
+                    if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
+                        cerr << "Fehler beim Senden der ACK-Antwort" << endl;
+                    } else {
+                        cout << "ACK-Antwort gesendet" << endl;
+                    }
+                }
+
+                //TODO WEITEREN BEFEHLE HIER IMPLEMENTIEREN
+
+            }
+        } else if (bytes_received == 0) {
+            cout << "Client hat die Verbindung geschlossen" << endl;
+        } else {
+            cerr << "Fehler beim Empfangen der Daten" << endl;
+        }
+    }
+    close(client_socket);
 }
 
 
@@ -69,7 +113,7 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
         } else {
             cout << "ACK-Antwort gesendet" << endl;
 
-            handle_mail();
+            handle_mail(client_socket, buffer);
         }
     } else if (bytes_received == 0) {
         cout << "Client hat die Verbindung geschlossen" << endl;
@@ -81,7 +125,19 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
 
 
 
-int main() {
+int main(int argc, char* argv[]) {
+    // Standardwerte
+    int port = SERVER_PORT;
+    string mail_spool_dir = MAIL_SPOOL_DIR;
+
+    // Argumente auswerten
+    if (argc >= 2) {
+        port = atoi(argv[1]);
+    }
+    if (argc >= 3) {
+        mail_spool_dir = argv[2];
+    }
+
     struct sockaddr_in server_addr, client_addr;
     int client_socket;
     socklen_t client_addr_size;
@@ -105,7 +161,7 @@ int main() {
 
     // Server-Adresse konfigurieren
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(SERVER_PORT);
+    server_addr.sin_port = htons(port);
 
     // IP-Adresse konvertieren und setzen
     if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
@@ -125,7 +181,8 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    cout << "Server gestartet auf " << SERVER_IP << ":" << SERVER_PORT << endl;
+    cout << "Server gestartet auf " << SERVER_IP << ":" << port << endl;
+    cout << "Mail-Spool-Verzeichnis: " << mail_spool_dir << endl;
     cout << "Warte auf Verbindungen..." << endl;
 
     while (true) {
