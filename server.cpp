@@ -21,8 +21,6 @@ using namespace std;
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
 
 
-
-
 // Funktion zum sicheren Senden aller Daten
 int sendall(int socket, const char *buffer, size_t length) {
     size_t total_sent = 0;
