@@ -1,12 +1,20 @@
-all: client.o server.o
-	g++ client.o -o client
-	g++ server.o -o server
+CXX := g++
+CXXFLAGS := -c -Wall
+LDFLAGS := -luuid -pthread
+
+all: client server
+
+client: client.o
+	$(CXX) client.o -o client
+
+server: server.o
+	$(CXX) server.o -o server $(LDFLAGS)
 
 client.o: client.cpp
-	g++ -c -Wall client.cpp
+	$(CXX) $(CXXFLAGS) client.cpp
 
 server.o: server.cpp
-	g++ -c -Wall server.cpp
+	$(CXX) $(CXXFLAGS) server.cpp
 
 clean:
 	rm -f *.o client server

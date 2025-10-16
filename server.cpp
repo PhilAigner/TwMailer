@@ -9,6 +9,8 @@
 
 using namespace std;
 
+#include "serverfunctions.cpp"
+
 // Konfigurationsvariablen
 #define SERVER_PORT 8080
 #define MAIL_SPOOL_DIR "./mailspool"
@@ -19,6 +21,7 @@ using namespace std;
 #define ERR "ERR"
 
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
+
 
 
 // Funktion zum sicheren Senden aller Daten
@@ -51,8 +54,6 @@ void handle_mail(int client_socket, char* buffer) {
     bool is_logged_in = false;
     bool is_running = true;
 
-    cout << "Hier könnte die Mail-Funktionalität implementiert werden." << endl;
-
     while (is_running) {
         int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
 
@@ -81,7 +82,15 @@ void handle_mail(int client_socket, char* buffer) {
                     }
                 }
 
-                //TODO WEITEREN BEFEHLE HIER IMPLEMENTIEREN
+                if (strncmp(buffer, "SEND", 6) == 0) {
+                    if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
+                        cerr << "Fehler beim Senden der ACK-Antwort" << endl;
+                    } else {
+                        // cout << "ACK-Antwort gesendet" << endl;
+                        
+                        
+                    }
+                }
 
             }
         } else if (bytes_received == 0) {
@@ -135,6 +144,9 @@ int main(int argc, char* argv[]) {
     if (argc >= 3) {
         mail_spool_dir = argv[2];
     }
+
+    // Configure base dir for serverfunctions
+    set_base_dir(mail_spool_dir);
 
     struct sockaddr_in server_addr, client_addr;
     int client_socket;
