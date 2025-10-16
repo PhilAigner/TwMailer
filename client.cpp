@@ -3,6 +3,8 @@
 #include <cstring>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <atomic>
+#include <thread>
 #include <unistd.h>
 
 using namespace std;
@@ -13,6 +15,79 @@ int server_port = 8080;
 
 string server_response = "ACK";
 
+atomic<bool> running(true); // https://cplusplus.com/reference/atomic/
+
+string str_tolower(const string& s) {
+    string result = s;
+    for (char& c : result) {
+        c = tolower(c);
+    }
+    return result;
+}
+
+string trim(const string& s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    size_t end = s.find_last_not_of(" \t\r\n");
+    return (start == string::npos) ? "" : s.substr(start, end - start + 1);
+}
+
+void send_message(int sock) {
+    string recipient, subject, message, line;
+
+    cout << "<< Recipient\n>> ";
+    getline(cin, recipient);
+    recipient = trim(recipient);
+
+    cout << "<< Subject\n>> ";
+    getline(cin, subject);
+    subject = trim(subject);
+
+    cout << "<< Message (end with a single '.' on a line)\n";
+    while (true) {
+        cout << ">> ";
+        getline(cin, line);
+        if (line == ".") break;
+        message += line + "\n";
+    }
+    message = trim(message);
+
+    if (recipient.empty() || message.empty()) {
+        cerr << "Fehler: Empfänger oder Nachricht ist leer.\n";
+        return;
+    }
+
+    // Construct message string (format: SEND|recipient|subject|message)
+    string full_msg = "SEND|" + recipient + "|" + subject + "|" + message;
+
+    if (send(sock, full_msg.c_str(), full_msg.size(), 0) == -1) {
+        cerr << "Fehler beim Senden der Nachricht.\n";
+    } else {
+        cout << "Nachricht an Server gesendet.\n";
+    }
+}
+
+void user_input_thread(int sock) {
+    while (running) {
+        cout << ">> ";
+        string command;
+        if (!getline(cin, command)) {
+            running = false;
+            break;
+        }
+
+        if (str_tolower(command) == "exit" or str_tolower(command) == "quit") {
+            cout << "Beende Verbindung...\n";
+            running = false;
+            break;
+        }
+
+        if (str_tolower(command) == "send") {
+            send_message(sock);
+        } else {
+            cout << "Eingegebenes Kommando: " << command << endl;
+        }
+    }
+}
 
 
 void handle_mail() {
@@ -75,8 +150,13 @@ int main(int argc, char* argv[]) {
     if (bytes_received > 0) {
         buffer[bytes_received] = '\0';
         if (string(buffer) == server_response) {
-			cout << "Erfolgreich mit Server verbunden!" << endl;
-			handle_mail();
+			cout << "Erfolgreich mit Server("<<server_ip<<") über Port "<<server_port<<" verbunden!" << endl;
+            thread input_thread(user_input_thread, sock);
+            while (running) {
+                this_thread::sleep_for(chrono::milliseconds(100));
+            }
+            if (input_thread.joinable())
+                input_thread.join();
 		} else {
 			cout << "Unerwartete Antwort vom Server: " << buffer << endl;
     		return server_error(sock);
