@@ -21,6 +21,9 @@ static filesystem::path BASE_DIR = filesystem::path("~/mailspool");
 void set_base_dir(const string& path) {
 	BASE_DIR = filesystem::path(path);
 }
+filesystem::path get_base_dir() {
+	return BASE_DIR;
+}
 
 // generate_uuid: wrapper around libuuid to produce a lower-case UUID string
 static string generate_uuid() {
@@ -48,32 +51,32 @@ bool save_mail(const string& username, const string& msg) {
 			return false;
 		}
 
-	// Generate a UUID v4 (using libuuid)
-	string uuid = generate_uuid();
+		// Generate a UUID v4 (using libuuid)
+		string uuid = generate_uuid();
 
-	// Timestamp (milliseconds since epoch)
-	auto now = chrono::system_clock::now();
-	auto ms = chrono::duration_cast<chrono::milliseconds>(now.time_since_epoch()).count();
-	string timestamp = to_string(ms);
+		// Timestamp (milliseconds since epoch)
+		auto now = chrono::system_clock::now();
+		auto ms = chrono::duration_cast<chrono::milliseconds>(now.time_since_epoch()).count();
+		string timestamp = to_string(ms);
 
-	// Compose id and content
-	string id = timestamp + "_" + uuid;
-	string content = uuid + "\n" + msg;
+		// Compose id and content
+		string id = timestamp + "_" + uuid;
+		string content = timestamp + "\n" + msg;
 
-	fs::path file_path = user_dir / (id + ".txt");
-	ofstream ofs(file_path, ios::binary);
-	if (!ofs) {
-		cerr << "save_mail: failed to open file '" << file_path << "' for writing\n";
-		return false;
-	}
-	ofs << content;
-	ofs.close();
-	if (!ofs) {
-		cerr << "save_mail: error while writing file '" << file_path << "'\n";
-		return false;
-	}
+		fs::path file_path = user_dir / (id + ".txt");
+		ofstream ofs(file_path, ios::binary);
+		if (!ofs) {
+			cerr << "save_mail: failed to open file '" << file_path << "' for writing\n";
+			return false;
+		}
+		ofs << content;
+		ofs.close();
+		if (!ofs) {
+			cerr << "save_mail: error while writing file '" << file_path << "'\n";
+			return false;
+		}
 
-	return true;
+		return true;
 	} catch (const exception& e) {
 		cerr << "save_mail: exception: " << e.what() << "\n";
 		return false;

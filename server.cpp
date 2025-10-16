@@ -7,8 +7,6 @@
 #include <signal.h>
 #include <thread>
 
-using namespace std;
-
 #include "serverfunctions.cpp"
 
 // Konfigurationsvariablen
@@ -22,7 +20,7 @@ using namespace std;
 
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
 
-
+using namespace std;
 
 // Funktion zum sicheren Senden aller Daten
 int sendall(int socket, const char *buffer, size_t length) {
@@ -50,56 +48,33 @@ void signal_handler(int signal_number) {
 }
 
 
-void handle_mail(int client_socket, char* buffer) {
+bool handle_mail(int client_socket, char* buffer) {
     bool is_logged_in = false;
-    bool is_running = true;
 
-    while (is_running) {
-        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
-
-        if (bytes_received > 0) {
-            cout << "Got the following: " << buffer << endl;
-
-            if (!is_logged_in) {
-                // Beispiel: Einfaches Login-Handling
-                if (strncmp(buffer, "LOGIN ", 6) == 0) {
-                    is_logged_in = true;
-                    cout << "User logged in." << endl;
-                } else {
-                    sendall(client_socket, ERR, strlen(ERR));
-                    continue; // Nächste Iteration, ohne ACK zu senden
-                }
-            }
-
-            //USER MUSS FÜR JEDEN BEFEHL EINGELOGGT SEIN!
-            if (is_logged_in) {
-
-                if (strncmp(buffer, "CMD", 6) == 0) {
-                    if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-                        cerr << "Fehler beim Senden der ACK-Antwort" << endl;
-                    } else {
-                        cout << "ACK-Antwort gesendet" << endl;
-                    }
-                }
-
-                if (strncmp(buffer, "SEND", 6) == 0) {
-                    if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-                        cerr << "Fehler beim Senden der ACK-Antwort" << endl;
-                    } else {
-                        // cout << "ACK-Antwort gesendet" << endl;
-                        
-                        
-                    }
-                }
-
-            }
-        } else if (bytes_received == 0) {
-            cout << "Client hat die Verbindung geschlossen" << endl;
+    if (!is_logged_in) {
+        // Beispiel: Einfaches Login-Handling
+        if (strncmp(buffer, "LOGIN ", 6) == 0) {
+            is_logged_in = true;
+            cout << "User logged in." << endl;
+            return true;
         } else {
-            cerr << "Fehler beim Empfangen der Daten" << endl;
+            sendall(client_socket, ERR, strlen(ERR));
+            return false;
         }
     }
-    close(client_socket);
+
+    //USER MUSS FÜR JEDEN BEFEHL EINGELOGGT SEIN!
+    if (is_logged_in) {
+        if (strncmp(buffer, "CMD", 6) == 0) {
+            if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
+                cerr << "Fehler beim Senden der ACK-Antwort" << endl;
+                return false;
+            } else {
+                cout << "ACK-Antwort gesendet" << endl;
+                return true;
+            }
+        }
+    } else return false;
 }
 
 
@@ -111,21 +86,39 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     cout << "Verbindung hergestellt mit " << client_ip << ":" << ntohs(client_addr.sin_port) << endl;
 
     memset(buffer, 0, BUFFER_SIZE);
-    int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+    
+    bool is_running = true;
+  
+    while (is_running) {
 
-    if (bytes_received > 0) {
-        cout << "Nachricht empfangen: " << buffer << endl;
-        if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-            cerr << "Fehler beim Senden der ACK-Antwort" << endl;
+        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+        
+        if (bytes_received > 0) {
+            cout << "Nachricht empfangen: " << buffer << endl;
+
+            bool rtrn = handle_mail(client_socket, buffer);
+
+            if (rtrn) {
+                if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
+                    cerr << "Fehler beim Senden der ACK-Antwort" << endl;
+                } else {
+                    cout << "ACK-Antwort gesendet" << endl;
+                }
+            }
+            else {
+                if (sendall(client_socket, ERR, strlen(ERR)) == -1) {
+                    cerr << "Fehler beim Senden der ERR-Antwort" << endl;
+                } else {
+                    cout << "ERR-Antwort gesendet" << endl;
+                }
+            }
+        } else if (bytes_received == 0) {
+            cout << "Client hat die Verbindung geschlossen" << endl;
+            break;
         } else {
-            cout << "ACK-Antwort gesendet" << endl;
-
-            handle_mail(client_socket, buffer);
+            cerr << "Fehler beim Empfangen der Daten" << endl;
+            break;
         }
-    } else if (bytes_received == 0) {
-        cout << "Client hat die Verbindung geschlossen" << endl;
-    } else {
-        cerr << "Fehler beim Empfangen der Daten" << endl;
     }
     close(client_socket);
 }
@@ -147,6 +140,10 @@ int main(int argc, char* argv[]) {
 
     // Configure base dir for serverfunctions
     set_base_dir(mail_spool_dir);
+
+    //TEST
+    // save_mail("testuser", "This is a test message.");
+
 
     struct sockaddr_in server_addr, client_addr;
     int client_socket;
@@ -192,7 +189,7 @@ int main(int argc, char* argv[]) {
     }
 
     cout << "Server gestartet auf " << SERVER_IP << ":" << port << endl;
-    cout << "Mail-Spool-Verzeichnis: " << mail_spool_dir << endl;
+    cout << "Mail-Spool-Verzeichnis: " << get_base_dir() << endl;
     cout << "Warte auf Verbindungen..." << endl;
 
     while (true) {
