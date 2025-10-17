@@ -1,0 +1,10 @@
+Sender: 
+Recipient: 123
+Subject: 123
+Date: 17.10.2025 13:22:30
+Message:
+123
+123
+123
+23
+123
