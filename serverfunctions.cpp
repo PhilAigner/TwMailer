@@ -76,6 +76,7 @@ bool save_mail(const string& username, const string& msg) {
 			return false;
 		}
 
+		cout << "save_mail: saved mail for user '" << username << "' to '" << file_path << "'\n";
 		return true;
 	} catch (const exception& e) {
 		cerr << "save_mail: exception: " << e.what() << "\n";

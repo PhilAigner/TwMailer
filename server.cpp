@@ -48,26 +48,30 @@ void signal_handler(int signal_number) {
     exit(EXIT_SUCCESS);
 }
 
-void ack_handler(int client_socket, bool rtrn) {
+bool ack_handler(int client_socket, bool rtrn) {
     if (rtrn) {
         if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
             cerr << "Fehler beim Senden der ACK-Antwort" << endl;
+            return false;
         } else {
             cout << "ACK-Antwort gesendet" << endl;
+            return true;
         }
     } else {
         if (sendall(client_socket, ERR, strlen(ERR)) == -1) {
             cerr << "Fehler beim Senden der ERR-Antwort" << endl;
+            return false;
         } else {
             cout << "ERR-Antwort gesendet" << endl;
+            return false;
         }
     }
 }
 
 
 bool function_send(char* buffer) {
-    // Extrahiere den Nachrichtentext nach "SEND"
-    const char* msg_start = buffer + 4; // 4 ist die Länge von "SEND"
+    // Extrahiere den Nachrichtentext nach "SEND|"
+    const char* msg_start = buffer + 5; // 5 ist die Länge von "SEND|"
     string message(msg_start);
 
     cout << "SEND function called with message: " << message << endl;
@@ -93,6 +97,8 @@ bool function_read(char* buffer) {
 bool handle_mail(int client_socket, char* buffer) {
     bool is_logged_in = false;
 
+    is_logged_in = true; // TEMPORÄR FÜR TESTS
+
     if (!is_logged_in) {
         // Einfaches Login-Handling
         if (strncmp(buffer, "LOGIN", 5) == 0) {
@@ -111,26 +117,17 @@ bool handle_mail(int client_socket, char* buffer) {
         if (strncmp(buffer, "SEND", 4) == 0) {
             bool rtrn = function_send(buffer);
 
-            ack_handler(client_socket, rtrn);
+            return rtrn;
         }
 
         // READ
         if (strncmp(buffer, "READ", 4) == 0) {
             bool rtrn = function_read(buffer);
 
-            ack_handler(client_socket, rtrn);
+            return rtrn;
         }
 
-        // Beispiel CMD
-        if (strncmp(buffer, "CMD", 6) == 0) {
-            if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-                cerr << "Fehler beim Senden der ACK-Antwort" << endl;
-                return false;
-            } else {
-                cout << "ACK-Antwort gesendet" << endl;
-                return true;
-            }
-        }
+
         return false;
     }
     return false;
@@ -180,25 +177,12 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
 
             bool rtrn = handle_mail(client_socket, buffer);
 
-            if (rtrn) {
-                if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-                    cerr << "Fehler beim Senden der ACK-Antwort" << endl;
-                } else {
-                    cout << "ACK-Antwort gesendet" << endl;
-                }
-            }
-            else {
-                if (sendall(client_socket, ERR, strlen(ERR)) == -1) {
-                    cerr << "Fehler beim Senden der ERR-Antwort" << endl;
-                } else {
-                    cout << "ERR-Antwort gesendet" << endl;
-                }
-            }
+            ack_handler(client_socket, rtrn);
         } else if (bytes_received == 0) {
             cout << "Client hat die Verbindung geschlossen" << endl;
             break;
         } else {
-            cerr << "Fehler beim Empfangen der Daten" << endl;
+            cerr << "Fehler beim Empfangen der Daten - schließe Verbindung" << endl;
             break;
         }
     }
