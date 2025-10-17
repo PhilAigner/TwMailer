@@ -64,6 +64,35 @@ void send_message(int sock) {
     } else {
         cout << "Nachricht an Server gesendet.\n";
     }
+
+    // TODO ACK|ERR empfangen und auswerten
+
+}
+
+void read_message(int sock) {
+    cout << "Hier muss die Lese-Funktionalität implementiert werden." << endl;
+
+    string txt = "READ|123|123";
+
+    if (send(sock, txt.c_str(), txt.size(), 0) == -1) {
+        cerr << "Fehler beim Senden der Nachricht.\n";
+    } else {
+        cout << "Nachricht an Server gesendet.\n";
+    }
+
+    // Antwort empfangen
+    char buffer[4096] = {0};
+    int bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0);
+    if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';
+        cout << "Antwort vom Server: " << buffer << endl;
+    } else {
+        cerr << "Fehler beim Empfangen der Antwort vom Server.\n";
+    }
+
+
+    // TODO ACK|ERR empfangen und auswerten
+    
 }
 
 void user_input_thread(int sock) {
@@ -83,8 +112,10 @@ void user_input_thread(int sock) {
 
         if (str_tolower(command) == "send") {
             send_message(sock);
+        } else if (str_tolower(command) == "read") {
+            read_message(sock);
         } else {
-            cout << "Eingegebenes Kommando: " << command << endl;
+            cout << "Eingegebenes Kommando unbekannt: " << command << endl;
         }
     }
 }

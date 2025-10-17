@@ -69,33 +69,51 @@ bool ack_handler(int client_socket, bool rtrn) {
 }
 
 
-bool function_send(char* buffer) {
+bool function_send(char* buffer, string username) {
     // Extrahiere den Nachrichtentext nach "SEND|"
     const char* msg_start = buffer + 5; // 5 ist die Länge von "SEND|"
     string message(msg_start);
 
     cout << "SEND function called with message: " << message << endl;
-    
-    // Beispiel: Speichere die Nachricht für einen festen Benutzer "testuser"
-    string username = "testuser"; // In einer echten Anwendung sollte dies dynamisch sein
 
     bool rtrn = save_mail(username, message);
     return rtrn;
 }
 
-bool function_read(char* buffer) {
-    // Extrahiere den Nachrichtentext nach "READ"
-    const char* msg_start = buffer + 4; // 4 ist die Länge von "READ"
+bool function_read(int client_socket, char* buffer) {
+    // Extrahiere den Nachrichtentext nach "READ|"
+    const char* msg_start = buffer + 5; // 5 ist die Länge von "READ|"
     string message(msg_start);
 
     cout << "READ function called with message: " << message << endl;
 
-    bool rtrn = true;
-    return rtrn;
+    // Parse message format: username|subject
+    size_t pipe_pos = message.find('|');
+    
+    if (pipe_pos == string::npos) {
+        cerr << "read_mail: invalid message format (expected: username|subject)\n";
+        return false;
+    }
+    
+    string search_username = message.substr(0, pipe_pos);
+    string subject = message.substr(pipe_pos + 1);
+    
+    // Call read_mail function
+    string result = read_mail(search_username, subject);
+    
+    // Send result back to client
+    if (sendall(client_socket, result.c_str(), result.length()) == -1) {
+        cerr << "Fehler beim Senden der READ-Antwort" << endl;
+        return false;
+    }
+    
+    cout << "READ-Antwort gesendet (" << result.length() << " bytes)" << endl;
+    return true;
 }
 
 bool handle_mail(int client_socket, char* buffer) {
     bool is_logged_in = false;
+    string username = ""; // Placeholder für Benutzernamen
 
     is_logged_in = true; // TEMPORÄR FÜR TESTS
 
@@ -103,10 +121,10 @@ bool handle_mail(int client_socket, char* buffer) {
         // Einfaches Login-Handling
         if (strncmp(buffer, "LOGIN", 5) == 0) {
             is_logged_in = true;
+            username = "testuser"; // In einer echten Anwendung sollte dies dynamisch sein
             cout << "User logged in." << endl;
             return true;
         } else {
-            sendall(client_socket, ERR, strlen(ERR));
             return false;
         }
     }
@@ -115,14 +133,14 @@ bool handle_mail(int client_socket, char* buffer) {
     if (is_logged_in) {
         // SEND
         if (strncmp(buffer, "SEND", 4) == 0) {
-            bool rtrn = function_send(buffer);
+            bool rtrn = function_send(buffer, username);
 
             return rtrn;
         }
 
         // READ
         if (strncmp(buffer, "READ", 4) == 0) {
-            bool rtrn = function_read(buffer);
+            bool rtrn = function_read(client_socket, buffer);
 
             return rtrn;
         }
@@ -207,10 +225,6 @@ int main(int argc, char* argv[]) {
     // Configure base dir for serverfunctions
     set_base_dir(mail_spool_dir);
 
-    //TEST
-    // save_mail("testuser", "This is a test message.");
-
-
     struct sockaddr_in server_addr, client_addr;
     int client_socket;
     socklen_t client_addr_size;
@@ -254,6 +268,7 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
+    //SERVER START
     cout << "Server gestartet auf " << SERVER_IP << ":" << port << endl;
     cout << "Mail-Spool-Verzeichnis: " << get_base_dir() << endl;
     cout << "Warte auf Verbindungen..." << endl;
