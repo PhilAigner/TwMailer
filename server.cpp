@@ -113,7 +113,7 @@ bool function_read(int client_socket, char* buffer) {
 
 bool handle_mail(int client_socket, char* buffer) {
     bool is_logged_in = false;
-    string username = ""; // Placeholder für Benutzernamen
+    string username = "testuser"; // Placeholder für Benutzernamen
 
     is_logged_in = true; // TEMPORÄR FÜR TESTS
 
