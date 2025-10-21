@@ -114,6 +114,25 @@ bool function_send(char* buffer, string username) {
     return rtrn;
 }
 
+//simplified for basic hand-in, return all messages
+bool function_list(int client_socket) {
+    std::cout << "LIST Function Called" << std::endl;
+
+    // Liste alle Mails (kein User-Verzeichnis nötig)
+    string list_result = list_mails(); // leerer String, da wir keinen user_dir mehr verwenden
+
+    // Sende Ergebnis an Client
+    int bytes_sent = send(client_socket, list_result.c_str(), list_result.size(), 0);
+    if (bytes_sent < 0) {
+        cerr << "function_list: failed to send mail list to client" << std::endl;
+        return false;
+    }
+
+    std::cout << "function_list: sent " << bytes_sent << " bytes to client" << std::endl;
+    return true;
+}
+
+/* saved for later PRO-Implementation
 bool function_list(int client_socket) {
     std::cout << "LIST Function Called" << endl;
 
@@ -133,6 +152,7 @@ bool function_list(int client_socket) {
     std::cout << "function_list: sent " << bytes_sent << " bytes to client" << endl;
     return true;
 }
+*/
 
 bool function_read(int client_socket, char* buffer) {
     // Extrahiere den Nachrichtentext nach "READ|"
@@ -283,6 +303,7 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     }
 
     close(client_socket);
+    std::cout << "Connection with client (" << client_ip << ":" << ntohs(client_addr.sin_port) << ") closed" << std::endl;
 }
 
 

@@ -130,61 +130,52 @@ bool save_mail(const string& username, const string& msg) {
 	}
 }
 
-string list_mails(const string& username) {
+//simplified for basic hand-in, return all messages
+string list_mails() {
     try {
         namespace fs = filesystem;
-
         fs::path base = BASE_DIR;
-        fs::path user_dir = base / username;
 
-        // Prüfen, ob Verzeichnis existiert
-        if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
-            return "ERR|User directory not found";
+        if (!fs::exists(base) || !fs::is_directory(base)) {
+            return "ERR|Mail base directory not found";
         }
 
         ostringstream result;
         int count = 0;
 
-        // Alle Dateien im User-Verzeichnis durchgehen
-        for (const auto& entry : fs::directory_iterator(user_dir)) {
+        // Rekursiv durch alle Unterordner iterieren
+        for (const auto& entry : fs::recursive_directory_iterator(base)) {
             if (!entry.is_regular_file() || entry.path().extension() != ".txt")
                 continue;
 
             ifstream ifs(entry.path());
             if (!ifs) {
-                cerr << "list_mails: failed to open file '" << entry.path() << "'\n";
+                cerr << "list_all_mails_indexed: failed to open file '" << entry.path() << "'\n";
                 continue;
             }
 
             string line, sender, subject, date;
             while (getline(ifs, line)) {
-                if (line.find("Sender: ") == 0)
-                    sender = line.substr(8);
-                else if (line.find("Subject: ") == 0)
-                    subject = line.substr(9);
-                else if (line.find("Date: ") == 0)
-                    date = line.substr(6);
+                if (line.find("Sender: ") == 0) sender = line.substr(8);
+                else if (line.find("Subject: ") == 0) subject = line.substr(9);
+                else if (line.find("Date: ") == 0) date = line.substr(6);
             }
             ifs.close();
 
-            // Dateiname als ID
-            string filename = entry.path().filename().string();
-            if (filename.size() > 4 && filename.substr(filename.size() - 4) == ".txt")
-                filename.erase(filename.size() - 4); // ".txt" entfernen
+            // Index statt Dateiname
+            int index = count + 1;
 
-            // Zeile im Format: ID|Sender|Subject|Date
-            result << filename << "|" << sender << "|" << subject << "|" << date << "\n";
+            // Format: Index|Sender|Subject|Date
+            result <<"[" << index << "] " << sender << "|" << subject << "|" << date << "\n";
             count++;
         }
 
-        if (count == 0) {
-            return "ERR|No messages available";
-        }
+        if (count == 0) return "ERR|No messages available";
 
         return "OK|" + to_string(count) + "\n" + result.str();
 
     } catch (const exception& e) {
-        cerr << "list_mails: exception: " << e.what() << "\n";
+        cerr << "list_all_mails_indexed: exception: " << e.what() << "\n";
         return "ERR|Exception while listing mails";
     }
 }
