@@ -43,7 +43,7 @@ int sendall(int socket, const char *buffer, size_t length) {
 
 // Signal-Handler für sauberes Beenden
 void signal_handler(int signal_number) {
-    cout << "\nBeende Server..." << endl;
+    cout << endl << "Closing Server..." << endl;
     close(server_socket);
     exit(EXIT_SUCCESS);
 }
@@ -51,18 +51,18 @@ void signal_handler(int signal_number) {
 bool ack_handler(int client_socket, bool rtrn) {
     if (rtrn) {
         if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-            cerr << "Fehler beim Senden der ACK-Antwort" << endl;
+            cerr << "Error Sending ACK-Response" << endl;
             return false;
         } else {
-            cout << "ACK-Antwort gesendet" << endl;
+            cout << "ACK-Response Sent" << endl;
             return true;
         }
     } else {
         if (sendall(client_socket, ERR, strlen(ERR)) == -1) {
-            cerr << "Fehler beim Senden der ERR-Antwort" << endl;
+            cerr << "Error Sending ERR-Response" << endl;
             return false;
         } else {
-            cout << "ERR-Antwort gesendet" << endl;
+            cout << "ERR-Response Sent" << endl;
             return false;
         }
     }
@@ -103,11 +103,11 @@ bool function_read(int client_socket, char* buffer) {
     
     // Send result back to client
     if (sendall(client_socket, result.c_str(), result.length()) == -1) {
-        cerr << "Fehler beim Senden der READ-Antwort" << endl;
+        cerr << "Error Sending READ-Response" << endl;
         return false;
     }
     
-    cout << "READ-Antwort gesendet (" << result.length() << " bytes)" << endl;
+    cout << "READ-Response Sent (" << result.length() << " bytes)" << endl;
     return true;
 }
 
@@ -144,8 +144,9 @@ bool handle_mail(int client_socket, char* buffer) {
 
             return rtrn;
         }
-
-
+        //LIST
+        if (strncmp(buffer, "LIST", 4) == 0) {
+            bool rtrn = function_list(client_socket, username);
         return false;
     }
     return false;
@@ -157,7 +158,7 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     char buffer[BUFFER_SIZE];
     char client_ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-    cout << "Verbindung hergestellt mit " << client_ip << ":" << ntohs(client_addr.sin_port) << endl;
+    cout << "Connection Established With " << client_ip << ":" << ntohs(client_addr.sin_port) << endl;
 
     memset(buffer, 0, BUFFER_SIZE);
 
@@ -166,16 +167,16 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
     if (bytes_received > 0) {
         if (strncmp(buffer, connectedmsg, strlen(connectedmsg)) == 0) {
-            cout << "Client succesfully connected" << endl;
+            cout << "Client ("<< client_ip << ":" << ntohs(client_addr.sin_port) << ") Connected" << endl;
             // Acknowledge the connection
             if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-                cerr << "Fehler beim Senden der connected-Antwort" << endl;
+                cerr << "Error Sending Connected-Response" << endl;
                 return;
             } else {
-                cout << "connected-Antwort gesendet .. continuing" << endl;
+                cout << "Connected-Response Sent To "<< client_ip << ":" << ntohs(client_addr.sin_port) <<" .. Continuing" << endl;
             }
         } else {
-            cerr << "Fehler beim connecten mit client" << endl;
+            cerr << "Failed Connection to Client" << endl;
 
             sendall(client_socket, ERR, strlen(ERR));
             return;
@@ -191,16 +192,16 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
         int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
         
         if (bytes_received > 0) {
-            cout << "Nachricht empfangen: " << buffer << endl;
+            cout << "Message Received: " << buffer << endl;
 
             bool rtrn = handle_mail(client_socket, buffer);
 
             ack_handler(client_socket, rtrn);
         } else if (bytes_received == 0) {
-            cout << "Client hat die Verbindung geschlossen" << endl;
+            cout << "Client ("<< client_ip << ":" << ntohs(client_addr.sin_port) <<") Has Closed Connection" << endl;
             break;
         } else {
-            cerr << "Fehler beim Empfangen der Daten - schließe Verbindung" << endl;
+            cerr << "Failed To Receiving Data - Closing Connection" << endl;
             break;
         }
     }
@@ -235,14 +236,14 @@ int main(int argc, char* argv[]) {
     // Socket erstellen
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket == -1) {
-        cerr << "Fehler beim Erstellen des Sockets" << endl;
+        cerr << "Failed To Create Socket" << endl;
         return EXIT_FAILURE;
     }
 
     // Socket-Optionen setzen (Socket-Wiederverwendung)
     int opt = 1;
     if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        cerr << "Fehler beim Setzen der Socket-Optionen" << endl;
+        cerr << "Failed To Set Socket Options" << endl;
         return EXIT_FAILURE;
     }
 
@@ -252,32 +253,32 @@ int main(int argc, char* argv[]) {
 
     // IP-Adresse konvertieren und setzen
     if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
-        cerr << "Ungültige Adresse / Adresse nicht unterstützt" << endl;
+        cerr << "Invalid Address" << endl;
         return EXIT_FAILURE;
     }
 
     // Socket an Adresse binden
     if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        cerr << "Bind fehlgeschlagen" << endl;
+        cerr << "Bind Failed" << endl;
         return EXIT_FAILURE;
     }
 
     // Auf Verbindungen warten
     if (listen(server_socket, BACKLOG) < 0) {
-        cerr << "Listen fehlgeschlagen" << endl;
+        cerr << "List Failed" << endl;
         return EXIT_FAILURE;
     }
 
     //SERVER START
-    cout << "Server gestartet auf " << SERVER_IP << ":" << port << endl;
-    cout << "Mail-Spool-Verzeichnis: " << get_base_dir() << endl;
-    cout << "Warte auf Verbindungen..." << endl;
+    cout << "Server Started On " << SERVER_IP << ":" << port << endl;
+    cout << "Mail-Spool-Directory: " << get_base_dir() << endl;
+    cout << "Waiting For Connection..." << endl;
 
     while (true) {
         client_addr_size = sizeof(client_addr);
         client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_size);
         if (client_socket < 0) {
-            cerr << "Fehler beim Akzeptieren der Verbindung" << endl;
+            cerr << "Failed To Accept Connection" << endl;
             continue;
         }
         // Starte neuen Thread für den Client (Lambda für sichere Übergabe)
