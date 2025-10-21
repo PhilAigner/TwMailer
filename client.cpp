@@ -17,6 +17,7 @@ int server_port = 8080;
 atomic<bool> running(true); // Flag für laufende Threads
 
 void user_input_thread(int sock) {
+    std::string username;
     while (running) {
         cout << ">> ";
         string command;
@@ -24,9 +25,13 @@ void user_input_thread(int sock) {
             running = false;
             break;
         }
-
-        string cmd = str_tolower(command);
-
+        
+        //detach cmd from args -> mainly for read
+        size_t space_pos = command.find(' ');
+        string cmd = str_tolower(space_pos == string::npos ? command : command.substr(0, space_pos));
+        string arg = (space_pos == string::npos) ? "" : trim(command.substr(space_pos + 1));
+        if (cmd.empty()) continue;
+        
         // QUIT/EXIT jederzeit möglich
         if (cmd == "exit" || cmd == "quit") {
             cout << "Closing Connection...\n";
@@ -36,7 +41,7 @@ void user_input_thread(int sock) {
 
         // LOGIN nur möglich, wenn noch nicht eingeloggt
         if (cmd == "login") {
-            string username, password;
+            string password;
             cout << "Username: ";
             getline(cin, username);
             username = trim(username);
@@ -75,14 +80,18 @@ void user_input_thread(int sock) {
         }
 
         // Alle anderen Kommandos werden einfach weitergeleitet
-        // (Server prüft logged_in)
+        // Server checks login-status
         if (cmd == "send") {
             send_message(sock);
-        } else if (cmd == "read") {
-            read_message(sock);
         } else if (cmd == "list") {
             list_messages(sock);
-        } else {
+        } else if (cmd == "read") {
+            if (arg.empty()) {
+                cout << "Usage: read <index>\n";
+                continue;
+            }
+            read_message(sock,username, arg); // arg = Index
+        }else {
             cout << "Unknown command: " << command << endl;
         }
     }

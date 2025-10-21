@@ -60,31 +60,56 @@ void send_message(int sock) {
 
 }
 
-void read_message(int sock) {
-    cout << "Hier muss die Lese-Funktionalität implementiert werden." << endl;
+void read_message(int sock,std::string& username, const std::string& index_str) {
+    string input = trim(index_str);
+    if (input.empty()) {
+        cout << "No index provided.\n";
+        return;
+    }
 
-    string txt = "READ|123|123";
+    // Prüfen, ob es eine Zahl ist
+    for (char c : input) {
+        if (!isdigit(c)) {
+            cout << "Invalid index. Please enter a number.\n";
+            return;
+        }
+    }
 
+    // Nachricht an Server senden: READ|index
+    string txt = "READ|" + username + "|" + input;
     if (send(sock, txt.c_str(), txt.size(), 0) == -1) {
         cerr << "Fehler beim Senden der Nachricht.\n";
-    } else {
-        cout << "Nachricht an Server gesendet." << endl;
+        return;
     }
 
-    // Antwort empfangen
-    char buffer[4096] = {0};
-    int bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_received > 0) {
+    // Server-Antwort empfangen (Loop für längere Nachrichten)
+    const int BUFFER_SIZE = 4096;
+    string response;
+    char buffer[BUFFER_SIZE];
+    int bytes_received = 0;
+
+    while ((bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0)) > 0) {
         buffer[bytes_received] = '\0';
-        cout << "Antwort vom Server: " << buffer << endl;
-    } else {
-        cerr << "Error Receiving Server-Response." << endl;
+        response += buffer;
+        if (bytes_received < BUFFER_SIZE - 1)
+            break;
     }
 
+    if (bytes_received < 0) {
+        cerr << "Fehler beim Empfangen der Server-Antwort.\n";
+        return;
+    }
 
-    // TODO ACK|ERR empfangen und auswerten
-    
+    // Antwort auswerten
+    if (response.rfind("OK|", 0) == 0) {
+        cout << "Mail gelesen:\n" << response.substr(3) << endl;
+    } else if (response.rfind("ERR|", 0) == 0) {
+        cerr << "Server Error: " << response.substr(4) << endl;
+    } else {
+        cout << "Unbekannte Antwort vom Server:\n" << response << endl;
+    }
 }
+
 
 void list_messages(int sock) {
     string cmd = "LIST";

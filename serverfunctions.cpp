@@ -26,13 +26,14 @@ const User test_user = {"testuser", "testpassword"};
 
 
 // Configurable base directory for user mail storage. Defaults to "users".
-static filesystem::path BASE_DIR = filesystem::path("~/mailspool");
+namespace fs = filesystem;
+static fs::path BASE_DIR = fs::path("~/mailspool");
 
 // set_base_dir: change the base directory used by save_mail
 void set_base_dir(const string& path) {
-	BASE_DIR = filesystem::path(path);
+	BASE_DIR = fs::path(path);
 }
-filesystem::path get_base_dir() {
+fs::path get_base_dir() {
 	return BASE_DIR;
 }
 
@@ -62,8 +63,7 @@ bool validate_login(const std::string& username, const std::string& password) {
 // Returns true on success, false otherwise.
 bool save_mail(const string& username, const string& msg) {
 	try {
-		namespace fs = filesystem;
-
+		
 		// Parse message format: recipient|subject|message
 		size_t first_pipe = msg.find('|');
 		size_t second_pipe = msg.find('|', first_pipe + 1);
@@ -130,29 +130,36 @@ bool save_mail(const string& username, const string& msg) {
 	}
 }
 
-//simplified for basic hand-in, return all messages
-string list_mails() {
-    try {
-        namespace fs = filesystem;
-        fs::path base = BASE_DIR;
 
-        if (!fs::exists(base) || !fs::is_directory(base)) {
-            return "ERR|Mail base directory not found";
+string list_mails(const string& username) {
+    try {
+        fs::path user_dir = BASE_DIR / username;
+
+        if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
+            return "ERR|User directory not found";
         }
 
         ostringstream result;
-        int count = 0;
+        vector<filesystem::path> mails;
 
-        // Rekursiv durch alle Unterordner iterieren
-        for (const auto& entry : fs::recursive_directory_iterator(base)) {
-            if (!entry.is_regular_file() || entry.path().extension() != ".txt")
-                continue;
-
-            ifstream ifs(entry.path());
-            if (!ifs) {
-                cerr << "list_all_mails_indexed: failed to open file '" << entry.path() << "'\n";
-                continue;
+        // Alle .txt Dateien sammeln
+        for (const auto& entry : fs::directory_iterator(user_dir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".txt") {
+                mails.push_back(entry.path());
             }
+        }
+
+        if (mails.empty()) {
+            return "ERR|No messages available";
+        }
+
+        // Mails sortieren (optional nach Dateiname)
+        sort(mails.begin(), mails.end());
+
+        // Indexierte Ausgabe
+        for (size_t i = 0; i < mails.size(); ++i) {
+            ifstream ifs(mails[i]);
+            if (!ifs) continue;
 
             string line, sender, subject, date;
             while (getline(ifs, line)) {
@@ -162,103 +169,64 @@ string list_mails() {
             }
             ifs.close();
 
-            // Index statt Dateiname
-            int index = count + 1;
-
-            // Format: Index|Sender|Subject|Date
-            result <<"[" << index << "] " << sender << "|" << subject << "|" << date << "\n";
-            count++;
+            result << "[" << (i + 1) << "] " << sender << "|" << subject << "|" << date << "\n";
         }
 
-        if (count == 0) return "ERR|No messages available";
-
-        return "OK|" + to_string(count) + "\n" + result.str();
+        return "OK|" + to_string(mails.size()) + "\n" + result.str();
 
     } catch (const exception& e) {
-        cerr << "list_all_mails_indexed: exception: " << e.what() << "\n";
+        cerr << "list_mails: exception: " << e.what() << "\n";
         return "ERR|Exception while listing mails";
     }
 }
 
 // read_mail: searches for mails in username's directory matching the subject (partial match)
 // Returns a string with all matching mails or an error message
-string read_mail(const string& username, const string& subject_search) {
-	try {
-		namespace fs = filesystem;
-		
-		// Get user directory
-		fs::path base = BASE_DIR;
-		fs::path user_dir = base / username;
-		
-		// Check if directory exists
-		if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
-			return "ERR: No mails found for user '" + username + "'";
-		}
-		
-		ostringstream result;
-		int count = 0;
-		
-		// Iterate through all files in user directory
-		for (const auto& entry : fs::directory_iterator(user_dir)) {
-			if (entry.is_regular_file() && entry.path().extension() == ".txt") {
-				// Read file content
-				ifstream ifs(entry.path());
-				if (!ifs) {
-					cerr << "read_mail: failed to open file '" << entry.path() << "'\n";
-					continue;
-				}
-				
-				string line;
-				string sender, recipient, subject, date, message;
-				bool in_message = false;
-				
-				// Parse file content
-				while (getline(ifs, line)) {
-					if (line.find("Sender: ") == 0) {
-						sender = line.substr(8);
-					} else if (line.find("Recipient: ") == 0) {
-						recipient = line.substr(11);
-					} else if (line.find("Subject: ") == 0) {
-						subject = line.substr(9);
-					} else if (line.find("Date: ") == 0) {
-						date = line.substr(6);
-					} else if (line.find("Message:") == 0) {
-						in_message = true;
-					} else if (in_message) {
-						if (!message.empty()) message += "\n";
-						message += line;
-					}
-				}
-				ifs.close();
-				
-				// Check if subject matches (case-insensitive partial match)
-				string subject_lower = subject;
-				string search_lower = subject_search;
-				transform(subject_lower.begin(), subject_lower.end(), subject_lower.begin(), ::tolower);
-				transform(search_lower.begin(), search_lower.end(), search_lower.begin(), ::tolower);
-				
-				if (subject_lower.find(search_lower) != string::npos) {
-					count++;
-					result << "=== Mail #" << count << " ===\n";
-					result << "From: " << sender << "\n";
-					result << "To: " << recipient << "\n";
-					result << "Subject: " << subject << "\n";
-					result << "Date: " << date << "\n";
-					result << "Message:\n" << message << "\n";
-					result << "==================\n\n";
-				}
-			}
-		}
-		
-		if (count == 0) {
-			return "No mails found matching subject '" + subject_search + "'";
-		}
-		
-		return to_string(count) + " mail(s) found:\n\n" + result.str();
-		
-	} catch (const exception& e) {
-		cerr << "read_mail: exception: " << e.what() << "\n";
-		return "ERR: Exception during mail search";
-	}
+string read_mail(const string& username, int index) {
+    fs::path base = BASE_DIR;
+
+    vector<fs::path> mail_files;
+
+    // Rekursiv alle .txt Dateien sammeln
+    for (const auto& entry : fs::recursive_directory_iterator(base)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".txt")
+            mail_files.push_back(entry.path());
+    }
+
+    if (mail_files.empty()) return "ERR|No mails available";
+
+    if (index < 1 || index > (int)mail_files.size())
+        return "ERR|Index out of range";
+
+    fs::path target_file = mail_files[index - 1];
+
+    // Mail aus Datei lesen
+    ifstream ifs(target_file);
+    if (!ifs) return "ERR|Failed to open mail file";
+
+    string line, sender, recipient, subject, date, message;
+    bool in_message = false;
+
+    while (getline(ifs, line)) {
+        if (line.find("Sender: ") == 0) sender = line.substr(8);
+        else if (line.find("Recipient: ") == 0) recipient = line.substr(11);
+        else if (line.find("Subject: ") == 0) subject = line.substr(9);
+        else if (line.find("Date: ") == 0) date = line.substr(6);
+        else if (line.find("Message:") == 0) in_message = true;
+        else if (in_message) {
+            if (!message.empty()) message += "\n";
+            message += line;
+        }
+    }
+    ifs.close();
+
+    ostringstream oss;
+    oss << "From: " << sender << "\n";
+    oss << "To: " << recipient << "\n";
+    oss << "Subject: " << subject << "\n";
+    oss << "Date: " << date << "\n";
+    oss << "Message:\n" << message << "\n";
+
+    return "OK|" + oss.str();
 }
 

@@ -115,75 +115,96 @@ bool function_send(char* buffer, string username) {
 }
 
 //simplified for basic hand-in, return all messages
-bool function_list(int client_socket) {
+bool function_list(int client_socket, const std::string& username) {
     std::cout << "LIST Function Called" << std::endl;
 
-    // Liste alle Mails (kein User-Verzeichnis nötig)
-    string list_result = list_mails(); // leerer String, da wir keinen user_dir mehr verwenden
-
+    string list_result = list_mails(username); 
     // Sende Ergebnis an Client
     int bytes_sent = send(client_socket, list_result.c_str(), list_result.size(), 0);
     if (bytes_sent < 0) {
-        cerr << "function_list: failed to send mail list to client" << std::endl;
+        cerr << "function_list: Failed To Send Mail-List To Client" << std::endl;
         return false;
     }
 
-    std::cout << "function_list: sent " << bytes_sent << " bytes to client" << std::endl;
+    std::cout << "LIST: Sent Mail-List For User '" << username << "'" << std::endl;
+    //std::cout << "function_list: sent " << bytes_sent << " bytes to client" << std::endl;
     return true;
 }
-
-/* saved for later PRO-Implementation
-bool function_list(int client_socket) {
-    std::cout << "LIST Function Called" << endl;
-
-    // Da wir noch kein Benutzerkonzept haben, verwenden wir einfach einen festen Platzhalter.
-    string username = "testuser";
-
-    // Rufe die Funktion auf, die alle Mails für diesen Benutzer auflistet.
-    string list_result = read_mail(username, ""); // Leerer Suchstring => alle Mails
-
-    // Sende das Ergebnis an den Client zurück.
-    int bytes_sent = send(client_socket, list_result.c_str(), list_result.size(), 0);
-    if (bytes_sent < 0) {
-        cerr << "function_list: failed to send mail list to client" << endl;
-        return false;
-    }
-
-    std::cout << "function_list: sent " << bytes_sent << " bytes to client" << endl;
-    return true;
-}
-*/
 
 bool function_read(int client_socket, char* buffer) {
-    // Extrahiere den Nachrichtentext nach "READ|"
-    const char* msg_start = buffer + 5; // 5 ist die Länge von "READ|"
+    // Nachricht nach "READ|" extrahieren
+    const char* msg_start = buffer + 5; // Länge von "READ|"
     string message(msg_start);
 
-    std::cout << "READ Function Called With Message: " << message << endl;
+    cout << "READ Function Called With Message: " << message << endl;
 
-    // Parse message format: username|subject
+    // Parse: username|index
     size_t pipe_pos = message.find('|');
-    
     if (pipe_pos == string::npos) {
-        cerr << "read_mail: Invalid Message Format (Expected: username|subject)\n";
+        cerr << "function_read: Invalid message format (expected: username|index)\n";
+        string err = "ERR|Invalid message format";
+        send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
-    
-    string search_username = message.substr(0, pipe_pos);
-    string subject = message.substr(pipe_pos + 1);
-    
-    // Call read_mail function
-    string result = read_mail(search_username, subject);
-    
-    // Send result back to client
-    if (sendall(client_socket, result.c_str(), result.length()) == -1) {
-        cerr << "Error Sending READ-Response" << endl;
+
+    string username = message.substr(0, pipe_pos);
+    string index_str = message.substr(pipe_pos + 1);
+    int mail_index = 0;
+    try {
+        mail_index = stoi(index_str);
+    } catch (...) {
+        string err = "ERR|Invalid mail index";
+        send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
-    
-    std::cout << "READ-Response Sent (" << result.length() << " bytes)" << endl;
+
+    if (mail_index <= 0) {
+        string err = "ERR|Mail index must be >= 1";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    // Liste alle Mails für den User
+    vector<filesystem::path> user_mails;
+    fs::path user_dir = BASE_DIR / username;
+    if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
+        string err = "ERR|User directory not found";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    for (const auto& entry : fs::directory_iterator(user_dir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".txt") {
+            user_mails.push_back(entry.path());
+        }
+    }
+
+    if (mail_index > (int)user_mails.size()) {
+        string err = "ERR|Mail index out of range";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    // Mail-Datei lesen
+    ifstream ifs(user_mails[mail_index - 1]);
+    if (!ifs) {
+        string err = "ERR|Failed to open mail";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    string line, content;
+    while (getline(ifs, line)) {
+        content += line + "\n";
+    }
+    ifs.close();
+
+    string resp = "OK|" + content;
+    send(client_socket, resp.c_str(), resp.size(), 0);
+    cout << "function_read: sent mail #" << mail_index << " to client\n";
     return true;
 }
+
 
 bool handle_commands(int client_socket, char* buffer, const std::string& username) {
     // SEND
@@ -200,7 +221,7 @@ bool handle_commands(int client_socket, char* buffer, const std::string& usernam
 
     // LIST
     if (strncmp(buffer, "LIST", 4) == 0) {
-        bool rtrn = function_list(client_socket);
+        bool rtrn = function_list(client_socket, username);
         return rtrn;
     }
 
@@ -263,7 +284,7 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
         if (validate_login(user, pass)) {
             logged_in = true;
             username = user;
-            send(client_socket, "OK|Login successful\n", 21, 0);
+            send(client_socket, "OK|Login Successful\n", 21, 0);
             std::cout << "User Logged In: " << username << std::endl;
         } else {
             send(client_socket, "ERR|Invalid username or password\n", 34, 0);
@@ -276,13 +297,13 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
         return;
     }
 
-    // --- Mail-Kommandos ---
+    // --- Mail-Commands ---
     bool is_running = true;
     while (is_running) {
         memset(buffer, 0, BUFFER_SIZE);
         bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
         if (bytes_received == 0) {
-            // Client hat Socket sauber geschlossen
+            // Client has closed Socket properly
             std::cout << "Client (" << client_ip << ":" << ntohs(client_addr.sin_port) << ") has closed connection" << std::endl;
             break;
         } else if (bytes_received < 0) {
@@ -299,7 +320,9 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
         }
 
         bool rtrn = handle_commands(client_socket, buffer, username);
+        if (strncmp(buffer, "SEND", 4) == 0 || strncmp(buffer, "LIST", 4) == 0) { //ack_handler would otherwise mess with READ responses -> ACK-Response misunderstood as mail content
         ack_handler(client_socket, rtrn);
+        }
     }
 
     close(client_socket);
@@ -310,6 +333,8 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
 
 
 int main(int argc, char* argv[]) {
+    //std::cout << __cplusplus << std::endl; // C++ Version -> 201703L = C++17
+
     // Standardwerte
     int port = SERVER_PORT;
     string mail_spool_dir = MAIL_SPOOL_DIR;
