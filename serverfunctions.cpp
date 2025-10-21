@@ -15,6 +15,16 @@
 
 using namespace std;
 
+struct User {
+    std::string username;
+    std::string password;
+};
+//hardcoded test user
+const User test_user = {"testuser", "testpassword"};
+//
+
+
+
 // Configurable base directory for user mail storage. Defaults to "users".
 static filesystem::path BASE_DIR = filesystem::path("~/mailspool");
 
@@ -35,6 +45,17 @@ static string generate_uuid() {
 	return string(str);
 }
 
+string str_tolower(const string& s) {
+    string result = s;
+    for (char& c : result) {
+        c = tolower(c);
+    }
+    return result;
+}
+
+bool validate_login(const std::string& username, const std::string& password) {
+    return username == test_user.username && password == test_user.password;
+}
 
 // save_mail: saves `msg` for `username` under <BASE_DIR>/<username>/<uuid>.txt
 // The file content is structured with recipient, subject, and message body
@@ -107,6 +128,65 @@ bool save_mail(const string& username, const string& msg) {
 		cerr << "save_mail: exception: " << e.what() << "\n";
 		return false;
 	}
+}
+
+string list_mails(const string& username) {
+    try {
+        namespace fs = filesystem;
+
+        fs::path base = BASE_DIR;
+        fs::path user_dir = base / username;
+
+        // Prüfen, ob Verzeichnis existiert
+        if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
+            return "ERR|User directory not found";
+        }
+
+        ostringstream result;
+        int count = 0;
+
+        // Alle Dateien im User-Verzeichnis durchgehen
+        for (const auto& entry : fs::directory_iterator(user_dir)) {
+            if (!entry.is_regular_file() || entry.path().extension() != ".txt")
+                continue;
+
+            ifstream ifs(entry.path());
+            if (!ifs) {
+                cerr << "list_mails: failed to open file '" << entry.path() << "'\n";
+                continue;
+            }
+
+            string line, sender, subject, date;
+            while (getline(ifs, line)) {
+                if (line.find("Sender: ") == 0)
+                    sender = line.substr(8);
+                else if (line.find("Subject: ") == 0)
+                    subject = line.substr(9);
+                else if (line.find("Date: ") == 0)
+                    date = line.substr(6);
+            }
+            ifs.close();
+
+            // Dateiname als ID
+            string filename = entry.path().filename().string();
+            if (filename.size() > 4 && filename.substr(filename.size() - 4) == ".txt")
+                filename.erase(filename.size() - 4); // ".txt" entfernen
+
+            // Zeile im Format: ID|Sender|Subject|Date
+            result << filename << "|" << sender << "|" << subject << "|" << date << "\n";
+            count++;
+        }
+
+        if (count == 0) {
+            return "ERR|No messages available";
+        }
+
+        return "OK|" + to_string(count) + "\n" + result.str();
+
+    } catch (const exception& e) {
+        cerr << "list_mails: exception: " << e.what() << "\n";
+        return "ERR|Exception while listing mails";
+    }
 }
 
 // read_mail: searches for mails in username's directory matching the subject (partial match)

@@ -21,8 +21,6 @@
 
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
 
-using namespace std;
-
 // Funktion zum sicheren Senden aller Daten
 int sendall(int socket, const char *buffer, size_t length) {
     size_t total_sent = 0;
@@ -43,7 +41,7 @@ int sendall(int socket, const char *buffer, size_t length) {
 
 // Signal-Handler für sauberes Beenden
 void signal_handler(int signal_number) {
-    cout << endl << "Closing Server..." << endl;
+    std::cout << endl << "Closing Server..." << endl;
     close(server_socket);
     exit(EXIT_SUCCESS);
 }
@@ -54,7 +52,7 @@ bool ack_handler(int client_socket, bool rtrn) {
             cerr << "Error Sending ACK-Response" << endl;
             return false;
         } else {
-            cout << "ACK-Response Sent" << endl;
+            std::cout << "ACK-Response Sent" << endl;
             return true;
         }
     } else {
@@ -62,22 +60,78 @@ bool ack_handler(int client_socket, bool rtrn) {
             cerr << "Error Sending ERR-Response" << endl;
             return false;
         } else {
-            cout << "ERR-Response Sent" << endl;
+            std::cout << "ERR-Response Sent" << endl;
             return false;
         }
     }
 }
 
+bool function_login(int client_socket) {
+    string username, password;
+
+    // 1. Username vom Client empfangen
+    char buffer[256] = {0};
+    int bytes_received = recv(client_socket, buffer, sizeof(buffer)-1, 0);
+    if (bytes_received <= 0) {
+        cerr << "function_login: failed to receive username\n";
+        return false;
+    }
+    buffer[bytes_received] = '\0';
+    username = buffer;
+
+    // 2. Passwort vom Client empfangen
+    memset(buffer, 0, sizeof(buffer));
+    bytes_received = recv(client_socket, buffer, sizeof(buffer)-1, 0);
+    if (bytes_received <= 0) {
+        cerr << "function_login: failed to receive password\n";
+        return false;
+    }
+    buffer[bytes_received] = '\0';
+    password = buffer;
+
+    // 3. Login prüfen
+    if (validate_login(username, password)) {
+        string ok = "OK|Login successful\n";
+        send(client_socket, ok.c_str(), ok.size(), 0);
+        std::cout << "User '" << username << "' logged in successfully.\n";
+        return true;
+    } else {
+        string err = "ERR|Invalid username or password\n";
+        send(client_socket, err.c_str(), err.size(), 0);
+        std::cout << "Failed login attempt for user '" << username << "'.\n";
+        return false;
+    }
+}
 
 bool function_send(char* buffer, string username) {
     // Extrahiere den Nachrichtentext nach "SEND|"
     const char* msg_start = buffer + 5; // 5 ist die Länge von "SEND|"
     string message(msg_start);
 
-    cout << "SEND function called with message: " << message << endl;
+    std::cout << "SEND Function Called With Message: " << message << endl;
 
     bool rtrn = save_mail(username, message);
     return rtrn;
+}
+
+bool function_list(int client_socket) {
+    std::cout << "LIST Function Called" << endl;
+
+    // Da wir noch kein Benutzerkonzept haben, verwenden wir einfach einen festen Platzhalter.
+    string username = "testuser";
+
+    // Rufe die Funktion auf, die alle Mails für diesen Benutzer auflistet.
+    string list_result = read_mail(username, ""); // Leerer Suchstring => alle Mails
+
+    // Sende das Ergebnis an den Client zurück.
+    int bytes_sent = send(client_socket, list_result.c_str(), list_result.size(), 0);
+    if (bytes_sent < 0) {
+        cerr << "function_list: failed to send mail list to client" << endl;
+        return false;
+    }
+
+    std::cout << "function_list: sent " << bytes_sent << " bytes to client" << endl;
+    return true;
 }
 
 bool function_read(int client_socket, char* buffer) {
@@ -85,13 +139,13 @@ bool function_read(int client_socket, char* buffer) {
     const char* msg_start = buffer + 5; // 5 ist die Länge von "READ|"
     string message(msg_start);
 
-    cout << "READ function called with message: " << message << endl;
+    std::cout << "READ Function Called With Message: " << message << endl;
 
     // Parse message format: username|subject
     size_t pipe_pos = message.find('|');
     
     if (pipe_pos == string::npos) {
-        cerr << "read_mail: invalid message format (expected: username|subject)\n";
+        cerr << "read_mail: Invalid Message Format (Expected: username|subject)\n";
         return false;
     }
     
@@ -107,48 +161,33 @@ bool function_read(int client_socket, char* buffer) {
         return false;
     }
     
-    cout << "READ-Response Sent (" << result.length() << " bytes)" << endl;
+    std::cout << "READ-Response Sent (" << result.length() << " bytes)" << endl;
     return true;
 }
 
-bool handle_mail(int client_socket, char* buffer) {
-    bool is_logged_in = false;
-    string username = "testuser"; // Placeholder für Benutzernamen
-
-    is_logged_in = true; // TEMPORÄR FÜR TESTS
-
-    if (!is_logged_in) {
-        // Einfaches Login-Handling
-        if (strncmp(buffer, "LOGIN", 5) == 0) {
-            is_logged_in = true;
-            username = "testuser"; // In einer echten Anwendung sollte dies dynamisch sein
-            cout << "User logged in." << endl;
-            return true;
-        } else {
-            return false;
-        }
+bool handle_commands(int client_socket, char* buffer, const std::string& username) {
+    // SEND
+    if (strncmp(buffer, "SEND", 4) == 0) {
+        bool rtrn = function_send(buffer, username);
+        return rtrn;
     }
 
-    //USER MUSS FÜR JEDEN BEFEHL EINGELOGGT SEIN!
-    if (is_logged_in) {
-        // SEND
-        if (strncmp(buffer, "SEND", 4) == 0) {
-            bool rtrn = function_send(buffer, username);
-
-            return rtrn;
-        }
-
-        // READ
-        if (strncmp(buffer, "READ", 4) == 0) {
-            bool rtrn = function_read(client_socket, buffer);
-
-            return rtrn;
-        }
-        //LIST
-        if (strncmp(buffer, "LIST", 4) == 0) {
-            bool rtrn = function_list(client_socket, username);
-        return false;
+    // READ
+    if (strncmp(buffer, "READ", 4) == 0) {
+        bool rtrn = function_read(client_socket, buffer);
+        return rtrn;
     }
+
+    // LIST
+    if (strncmp(buffer, "LIST", 4) == 0) {
+        bool rtrn = function_list(client_socket);
+        return rtrn;
+    }
+
+    // QUIT is handled in server.cpp->handle_client
+
+    // Unbekanntes Kommando
+    std::cout << "Unknown command received: " << buffer << endl;
     return false;
 }
 
@@ -158,55 +197,94 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     char buffer[BUFFER_SIZE];
     char client_ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
-    cout << "Connection Established With " << client_ip << ":" << ntohs(client_addr.sin_port) << endl;
 
+    std::cout << "Connection Established With " << client_ip << ":" << ntohs(client_addr.sin_port) << std::endl;
+
+    // --- Initiale Verbindungsbestätigung ---
     memset(buffer, 0, BUFFER_SIZE);
-
-    
-    // Initial message handling
     int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
-    if (bytes_received > 0) {
-        if (strncmp(buffer, connectedmsg, strlen(connectedmsg)) == 0) {
-            cout << "Client ("<< client_ip << ":" << ntohs(client_addr.sin_port) << ") Connected" << endl;
-            // Acknowledge the connection
-            if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
-                cerr << "Error Sending Connected-Response" << endl;
-                return;
-            } else {
-                cout << "Connected-Response Sent To "<< client_ip << ":" << ntohs(client_addr.sin_port) <<" .. Continuing" << endl;
-            }
-        } else {
-            cerr << "Failed Connection to Client" << endl;
+    if (bytes_received <= 0) {
+        close(client_socket);
+        return;
+    }
+    buffer[bytes_received] = '\0';
 
-            sendall(client_socket, ERR, strlen(ERR));
+    if (std::string(buffer) == "connected") {
+        if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
+            std::cerr << "Failed to send initial ACK" << std::endl;
+            close(client_socket);
             return;
         }
+        std::cout << "Client connection acknowledged." << std::endl;
+    } else {
+        std::cerr << "Unexpected initial message: " << buffer << std::endl;
+        sendall(client_socket, ERR, strlen(ERR));
+        close(client_socket);
+        return;
     }
 
-    //start main client loop
-    
-    bool is_running = true;
-  
-    while (is_running) {
+    // --- Login ---
+    bool logged_in = false;
+    std::string username;
 
-        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
-        
-        if (bytes_received > 0) {
-            cout << "Message Received: " << buffer << endl;
+    while (!logged_in) {
+        memset(buffer, 0, BUFFER_SIZE);
+        bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0); // Username
+        if (bytes_received <= 0) break;
+        buffer[bytes_received] = '\0';
+        std::string user(buffer);
 
-            bool rtrn = handle_mail(client_socket, buffer);
+        memset(buffer, 0, BUFFER_SIZE);
+        bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0); // Password
+        if (bytes_received <= 0) break;
+        buffer[bytes_received] = '\0';
+        std::string pass(buffer);
 
-            ack_handler(client_socket, rtrn);
-        } else if (bytes_received == 0) {
-            cout << "Client ("<< client_ip << ":" << ntohs(client_addr.sin_port) <<") Has Closed Connection" << endl;
-            break;
+        if (validate_login(user, pass)) {
+            logged_in = true;
+            username = user;
+            send(client_socket, "OK|Login successful\n", 21, 0);
+            std::cout << "User Logged In: " << username << std::endl;
         } else {
-            cerr << "Failed To Receiving Data - Closing Connection" << endl;
-            break;
+            send(client_socket, "ERR|Invalid username or password\n", 34, 0);
+            std::cout << "Login Failed For: " << user << std::endl;
         }
     }
+
+    if (!logged_in) {
+        close(client_socket);
+        return;
+    }
+
+    // --- Mail-Kommandos ---
+    bool is_running = true;
+    while (is_running) {
+        memset(buffer, 0, BUFFER_SIZE);
+        bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+        if (bytes_received == 0) {
+            // Client hat Socket sauber geschlossen
+            std::cout << "Client (" << client_ip << ":" << ntohs(client_addr.sin_port) << ") has closed connection" << std::endl;
+            break;
+        } else if (bytes_received < 0) {
+            std::cerr << "Failed receiving data - closing connection" << std::endl;
+            break;
+        }
+        buffer[bytes_received] = '\0';
+        std::string cmd(buffer);
+
+        //Quit is handled here instead of handle_commands -> loop break necessary
+        if (str_tolower(cmd) == "quit" || str_tolower(cmd) == "exit") {
+        std::cout << "Client (" << client_ip << ":" << ntohs(client_addr.sin_port) << ") requested to quit" << std::endl;
+        break;
+        }
+
+        bool rtrn = handle_commands(client_socket, buffer, username);
+        ack_handler(client_socket, rtrn);
+    }
+
     close(client_socket);
 }
+
 
 
 
@@ -270,9 +348,9 @@ int main(int argc, char* argv[]) {
     }
 
     //SERVER START
-    cout << "Server Started On " << SERVER_IP << ":" << port << endl;
-    cout << "Mail-Spool-Directory: " << get_base_dir() << endl;
-    cout << "Waiting For Connection..." << endl;
+    std::cout << "Server Started On " << SERVER_IP << ":" << port << endl;
+    std::cout << "Mail-Spool-Directory: " << get_base_dir() << endl;
+    std::cout << "Waiting For Connection..." << endl;
 
     while (true) {
         client_addr_size = sizeof(client_addr);
