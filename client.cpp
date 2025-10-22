@@ -87,10 +87,16 @@ void user_input_thread(int sock) {
             list_messages(sock);
         } else if (cmd == "read") {
             if (arg.empty()) {
-                cout << "Usage: read <index>\n";
+                cout << "Usage: read <index>"<< endl;
                 continue;
             }
             read_message(sock,username, arg); // arg = Index
+        }else if (cmd == "delete") {
+            if (arg.empty()) {
+                cout << "Usage: delete <index>"<< endl;
+                continue;
+            }
+            delete_message(sock, username, arg);
         }else {
             cout << "Unknown command: " << command << endl;
         }

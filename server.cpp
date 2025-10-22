@@ -225,6 +225,11 @@ bool handle_commands(int client_socket, char* buffer, const std::string& usernam
         return rtrn;
     }
 
+    // DELETE
+    if (strncmp(buffer, "DELETE", 6) == 0) {
+    function_delete(client_socket, buffer);
+    }
+
     // QUIT is handled in server.cpp->handle_client
 
     // Unbekanntes Kommando
@@ -320,7 +325,7 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
         }
 
         bool rtrn = handle_commands(client_socket, buffer, username);
-        if (strncmp(buffer, "SEND", 4) == 0 || strncmp(buffer, "LIST", 4) == 0) { //ack_handler would otherwise mess with READ responses -> ACK-Response misunderstood as mail content
+        if (strncmp(buffer, "SEND", 4) == 0 || strncmp(buffer, "DELETE", 6) == 0) { //ack_handler would otherwise mess with READ responses -> ACK-Response misunderstood as mail content
         ack_handler(client_socket, rtrn);
         }
     }

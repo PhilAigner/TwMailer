@@ -20,7 +20,7 @@ struct User {
     std::string password;
 };
 //hardcoded test user
-const User test_user = {"testuser", "testpassword"};
+const User test_user = {"testuser", "testpwd"};
 //
 
 
@@ -54,12 +54,11 @@ string str_tolower(const string& s) {
     return result;
 }
 
-bool validate_login(const std::string& username, const std::string& password) {
+bool validate_login(const std::string& username, const std::string& password) { //adapt after ldap-implementation
     return username == test_user.username && password == test_user.password;
 }
 
 // save_mail: saves `msg` for `username` under <BASE_DIR>/<username>/<uuid>.txt
-// The file content is structured with recipient, subject, and message body
 // Returns true on success, false otherwise.
 bool save_mail(const string& username, const string& msg) {
 	try {
@@ -230,3 +229,73 @@ string read_mail(const string& username, int index) {
     return "OK|" + oss.str();
 }
 
+bool function_delete(int client_socket, char* buffer) {
+    // Nachricht nach "DELETE|" extrahieren
+    const char* msg_start = buffer + 7; // Länge von "DELETE|"
+    std::string message(msg_start);
+
+    std::cout << "DELETE Function Called With Message: " << message << std::endl;
+
+    // Format: username|index
+    size_t pipe_pos = message.find('|');
+    if (pipe_pos == std::string::npos) {
+        std::string err = "ERR|Invalid message format";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    std::string username = message.substr(0, pipe_pos);
+    std::string index_str = message.substr(pipe_pos + 1);
+
+    int mail_index = 0;
+    try {
+        mail_index = std::stoi(index_str);
+    } catch (...) {
+        std::string err = "ERR|Invalid mail index";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    if (mail_index <= 0) {
+        std::string err = "ERR|Mail index must be >= 1";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    // Benutzerverzeichnis prüfen
+    fs::path user_dir = BASE_DIR / username;
+    if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
+        std::string err = "ERR|User directory not found";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    // Alle Mails auflisten
+    std::vector<fs::path> user_mails;
+    for (const auto& entry : fs::directory_iterator(user_dir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".txt")
+            user_mails.push_back(entry.path());
+    }
+
+    if (mail_index > (int)user_mails.size()) {
+        std::string err = "ERR|Mail index out of range";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    // Datei löschen
+    fs::path mail_to_delete = user_mails[mail_index - 1];
+    std::error_code ec;
+    fs::remove(mail_to_delete, ec);
+
+    if (ec) {
+        std::string err = "ERR|Failed to delete mail";
+        send(client_socket, err.c_str(), err.size(), 0);
+        return false;
+    }
+
+    std::string ok = "OK|Mail deleted successfully";
+    send(client_socket, ok.c_str(), ok.size(), 0);
+    std::cout << "function_delete: deleted mail #" << mail_index << " for user '" << username << "'\n";
+    return true;
+}

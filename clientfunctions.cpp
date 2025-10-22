@@ -162,3 +162,44 @@ void list_messages(int sock) {
         cout << "Unexpected Response From Server: " << response << endl;
     }
 }
+
+void delete_message(int sock, const std::string& username, const std::string& index_str) {
+    std::string input = trim(index_str);
+    if (input.empty()) {
+        std::cout << "No index provided.\n";
+        return;
+    }
+
+    for (char c : input) {
+        if (!isdigit(c)) {
+            std::cout << "Invalid index. Please enter a number.\n";
+            return;
+        }
+    }
+
+    std::string txt = "DELETE|" + username + "|" + input;
+    if (send(sock, txt.c_str(), txt.size(), 0) == -1) {
+        std::cerr << "Fehler beim Senden der Nachricht.\n";
+        return;
+    }
+
+    // Antwort empfangen
+    const int BUFFER_SIZE = 4096;
+    char buffer[BUFFER_SIZE];
+    int bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
+    if (bytes_received <= 0) {
+        std::cerr << "Fehler beim Empfangen der Server-Antwort.\n";
+        return;
+    }
+
+    buffer[bytes_received] = '\0';
+    std::string response(buffer);
+
+    if (response.rfind("OK|", 0) == 0) {
+        std::cout << response.substr(3) << std::endl;
+    } else if (response.rfind("ERR|", 0) == 0) {
+        std::cerr << "Server Error: " << response.substr(4) << std::endl;
+    } else {
+        std::cout << "Unbekannte Antwort vom Server:\n" << response << std::endl;
+    }
+}
