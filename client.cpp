@@ -14,6 +14,12 @@ using namespace std;
 string server_ip = "127.0.0.1";
 int server_port = 8080;
 
+string connected_msg = "connected";
+#define ACK "ACK"
+#define ERR "ERR"
+
+bool login_success = false;
+
 atomic<bool> running(true); // Flag für laufende Threads
 
 void user_input_thread(int sock) {
@@ -40,65 +46,54 @@ void user_input_thread(int sock) {
         }
 
         // LOGIN nur möglich, wenn noch nicht eingeloggt
-        if (cmd == "login") {
-            string password;
-            cout << "Username: ";
-            getline(cin, username);
-            username = trim(username);
-            cout << "Password: ";
-            getline(cin, password);
-            password = trim(password);
-
-            // Username senden
-            if (send(sock, username.c_str(), username.size(), 0) == -1) {
-                cerr << "Error sending username.\n";
-                continue;
-            }
-
-            // Password senden
-            if (send(sock, password.c_str(), password.size(), 0) == -1) {
-                cerr << "Error sending password.\n";
-                continue;
-            }
-
-            // Server-Antwort empfangen
-            char buffer[1024] = {0};
-            int bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0);
-            if (bytes_received <= 0) {
-                cerr << "Error receiving server response.\n";
-                continue;
-            }
-            buffer[bytes_received] = '\0';
-            string response(buffer);
-
-            if (response.rfind("OK", 0) == 0) {
-                cout << "Login successful!\n";
-            } else {
-                cout << "Login failed: " << response << endl;
-            }
-            continue; // Zur nächsten Eingabe
+        if (cmd == "login" && !login_success) {
+            if(handle_login(sock, username)) login_success = true;
+            continue;
         }
 
         // Alle anderen Kommandos werden einfach weitergeleitet
         // Server checks login-status
+        if (!login_success) {
+            cout << "Please login first using the 'login' command.\n";
+            continue;
+        }
+        bool res = false;
         if (cmd == "send") {
             send_message(sock);
-        } else if (cmd == "list") {
+            res = handle_ack(sock);
+            if (res) {
+                cout << "Message sent successfully.\n";
+            } else {
+                cout << "Failed to send message.\n";
+            }
+        }
+        else if (cmd == "list") {
             list_messages(sock);
-        } else if (cmd == "read") {
+        }
+        else if (cmd == "read") {
             if (arg.empty()) {
                 cout << "Usage: read <index>"<< endl;
                 continue;
             }
             read_message(sock,username, arg); // arg = Index
-        }else if (cmd == "delete") {
+        }
+        else if (cmd == "delete") {
             if (arg.empty()) {
                 cout << "Usage: delete <index>"<< endl;
                 continue;
             }
             delete_message(sock, username, arg);
-        }else {
+            res = handle_ack(sock);
+            /*
+            if (res) {
+                cout << "Message deleted successfully.\n";
+            } else {
+                cout << "Failed to delete message.\n";
+            }*/
+        }
+        else {
             cout << "Unknown command: " << command << endl;
+            continue;
         }
     }
 }
@@ -129,7 +124,6 @@ int main(int argc, char* argv[]) {
     }
 
     // Initiale „connected“-Nachricht an Server
-    string connected_msg = "connected";
     if (send(sock, connected_msg.c_str(), connected_msg.size(), 0) == -1) {
         cerr << "Error sending connection message\n";
         close(sock);
@@ -148,7 +142,7 @@ int main(int argc, char* argv[]) {
     string response(buffer);
 
     // Prüfen ob Server ACK gesendet hat
-    if (response.find("ACK") != 0) {
+    if (response.find(ACK) != 0) {
         cerr << "Unexpected response from server: " << response << endl;
         close(sock);
         return 1;

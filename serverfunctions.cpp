@@ -13,6 +13,9 @@
 #include <algorithm>	
 #include <uuid/uuid.h>
 
+#define ACK "ACK"
+#define ERR "ERR"
+
 using namespace std;
 
 struct User {
@@ -135,7 +138,7 @@ string list_mails(const string& username) {
         fs::path user_dir = BASE_DIR / username;
 
         if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
-            return "ERR|User directory not found";
+            return string(ERR) + "User directory not found";
         }
 
         ostringstream result;
@@ -149,7 +152,7 @@ string list_mails(const string& username) {
         }
 
         if (mails.empty()) {
-            return "ERR|No messages available";
+            return "No messages available";
         }
 
         // Mails sortieren (optional nach Dateiname)
@@ -171,11 +174,11 @@ string list_mails(const string& username) {
             result << "[" << (i + 1) << "] " << sender << "|" << subject << "|" << date << "\n";
         }
 
-        return "OK|" + to_string(mails.size()) + "\n" + result.str();
+        return to_string(mails.size()) + "\n" + result.str();
 
     } catch (const exception& e) {
         cerr << "list_mails: exception: " << e.what() << "\n";
-        return "ERR|Exception while listing mails";
+        return string(ERR) + "Exception while listing mails";
     }
 }
 
@@ -239,7 +242,7 @@ bool function_delete(int client_socket, char* buffer) {
     // Format: username|index
     size_t pipe_pos = message.find('|');
     if (pipe_pos == std::string::npos) {
-        std::string err = "ERR|Invalid message format";
+        std::string err = string(ERR) + "Invalid message format";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -251,13 +254,13 @@ bool function_delete(int client_socket, char* buffer) {
     try {
         mail_index = std::stoi(index_str);
     } catch (...) {
-        std::string err = "ERR|Invalid mail index";
+        std::string err = string(ERR) + "Invalid mail index";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
 
     if (mail_index <= 0) {
-        std::string err = "ERR|Mail index must be >= 1";
+        std::string err = string(ERR) + "Mail index must be >= 1";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -265,7 +268,7 @@ bool function_delete(int client_socket, char* buffer) {
     // Benutzerverzeichnis prüfen
     fs::path user_dir = BASE_DIR / username;
     if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
-        std::string err = "ERR|User directory not found";
+        std::string err = string(ERR) + "User directory not found";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -278,7 +281,7 @@ bool function_delete(int client_socket, char* buffer) {
     }
 
     if (mail_index > (int)user_mails.size()) {
-        std::string err = "ERR|Mail index out of range";
+        std::string err = string(ERR) + "Mail index out of range";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -289,12 +292,12 @@ bool function_delete(int client_socket, char* buffer) {
     fs::remove(mail_to_delete, ec);
 
     if (ec) {
-        std::string err = "ERR|Failed to delete mail";
+        std::string err = string(ERR) + "Failed to delete mail";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
 
-    std::string ok = "OK|Mail deleted successfully";
+    std::string ok = "Mail deleted successfully";
     send(client_socket, ok.c_str(), ok.size(), 0);
     std::cout << "function_delete: deleted mail #" << mail_index << " for user '" << username << "'\n";
     return true;

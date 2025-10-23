@@ -17,7 +17,7 @@
 #define BACKLOG 10
 #define ACK "ACK"
 #define ERR "ERR"
-#define connectedmsg "connected"
+#define connected_msg "connected"
 
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
 
@@ -46,6 +46,7 @@ void signal_handler(int signal_number) {
     exit(EXIT_SUCCESS);
 }
 
+// handler um ACK/ERR meldungen jenach befehlserfolg zu senden
 bool ack_handler(int client_socket, bool rtrn) {
     if (rtrn) {
         if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
@@ -91,14 +92,11 @@ bool function_login(int client_socket) {
 
     // 3. Login prüfen
     if (validate_login(username, password)) {
-        string ok = "OK|Login successful\n";
-        send(client_socket, ok.c_str(), ok.size(), 0);
-        std::cout << "User '" << username << "' logged in successfully.\n";
+        // ack handler handels response
         return true;
     } else {
-        string err = "ERR|Invalid username or password\n";
-        send(client_socket, err.c_str(), err.size(), 0);
         std::cout << "Failed login attempt for user '" << username << "'.\n";
+        // ack handler handels response
         return false;
     }
 }
@@ -127,7 +125,6 @@ bool function_list(int client_socket, const std::string& username) {
     }
 
     std::cout << "LIST: Sent Mail-List For User '" << username << "'" << std::endl;
-    //std::cout << "function_list: sent " << bytes_sent << " bytes to client" << std::endl;
     return true;
 }
 
@@ -142,7 +139,7 @@ bool function_read(int client_socket, char* buffer) {
     size_t pipe_pos = message.find('|');
     if (pipe_pos == string::npos) {
         cerr << "function_read: Invalid message format (expected: username|index)\n";
-        string err = "ERR|Invalid message format";
+        string err = string(ERR) + "Invalid message format";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -153,13 +150,13 @@ bool function_read(int client_socket, char* buffer) {
     try {
         mail_index = stoi(index_str);
     } catch (...) {
-        string err = "ERR|Invalid mail index";
+        string err = string(ERR) + "Invalid mail index";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
 
     if (mail_index <= 0) {
-        string err = "ERR|Mail index must be >= 1";
+        string err = string(ERR) + "Mail index must be >= 1";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -168,7 +165,7 @@ bool function_read(int client_socket, char* buffer) {
     vector<filesystem::path> user_mails;
     fs::path user_dir = BASE_DIR / username;
     if (!fs::exists(user_dir) || !fs::is_directory(user_dir)) {
-        string err = "ERR|User directory not found";
+        string err = string(ERR) + "User directory not found";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -180,7 +177,7 @@ bool function_read(int client_socket, char* buffer) {
     }
 
     if (mail_index > (int)user_mails.size()) {
-        string err = "ERR|Mail index out of range";
+        string err = string(ERR) + "Mail index out of range";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -188,7 +185,7 @@ bool function_read(int client_socket, char* buffer) {
     // Mail-Datei lesen
     ifstream ifs(user_mails[mail_index - 1]);
     if (!ifs) {
-        string err = "ERR|Failed to open mail";
+        string err = string(ERR) + "Failed to open mail";
         send(client_socket, err.c_str(), err.size(), 0);
         return false;
     }
@@ -199,7 +196,7 @@ bool function_read(int client_socket, char* buffer) {
     }
     ifs.close();
 
-    string resp = "OK|" + content;
+    string resp = content;
     send(client_socket, resp.c_str(), resp.size(), 0);
     cout << "function_read: sent mail #" << mail_index << " to client\n";
     return true;
@@ -227,7 +224,8 @@ bool handle_commands(int client_socket, char* buffer, const std::string& usernam
 
     // DELETE
     if (strncmp(buffer, "DELETE", 6) == 0) {
-    function_delete(client_socket, buffer);
+        bool rtrn = function_delete(client_socket, buffer);
+        return rtrn;
     }
 
     // QUIT is handled in server.cpp->handle_client
@@ -250,12 +248,13 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     memset(buffer, 0, BUFFER_SIZE);
     int bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
     if (bytes_received <= 0) {
+        std::cerr << "Failed receiving initial message from client" << std::endl;
         close(client_socket);
         return;
     }
     buffer[bytes_received] = '\0';
 
-    if (std::string(buffer) == "connected") {
+    if (std::string(buffer) == connected_msg) {
         if (sendall(client_socket, ACK, strlen(ACK)) == -1) {
             std::cerr << "Failed to send initial ACK" << std::endl;
             close(client_socket);
@@ -289,15 +288,18 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
         if (validate_login(user, pass)) {
             logged_in = true;
             username = user;
-            send(client_socket, "OK|Login Successful\n", 21, 0);
+            // ack handler handels response
+            ack_handler(client_socket, true);
             std::cout << "User Logged In: " << username << std::endl;
         } else {
-            send(client_socket, "ERR|Invalid username or password\n", 34, 0);
+            // ack handler handels response
+            ack_handler(client_socket, false);
             std::cout << "Login Failed For: " << user << std::endl;
         }
     }
 
     if (!logged_in) {
+        std::cout << "Client failed to login. Closing connection." << std::endl;
         close(client_socket);
         return;
     }
@@ -320,13 +322,15 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
 
         //Quit is handled here instead of handle_commands -> loop break necessary
         if (str_tolower(cmd) == "quit" || str_tolower(cmd) == "exit") {
-        std::cout << "Client (" << client_ip << ":" << ntohs(client_addr.sin_port) << ") requested to quit" << std::endl;
-        break;
+            std::cout << "Client (" << client_ip << ":" << ntohs(client_addr.sin_port) << ") requested to quit" << std::endl;
+            break;
         }
 
         bool rtrn = handle_commands(client_socket, buffer, username);
-        if (strncmp(buffer, "SEND", 4) == 0 || strncmp(buffer, "DELETE", 6) == 0) { //ack_handler would otherwise mess with READ responses -> ACK-Response misunderstood as mail content
-        ack_handler(client_socket, rtrn);
+
+        // ACK/ERR handling for SEND, DELETE
+        if (strncmp(buffer, "SEND", 4) == 0 || strncmp(buffer, "DELETE", 6) == 0) {
+            ack_handler(client_socket, rtrn);
         }
     }
 

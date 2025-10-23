@@ -6,6 +6,9 @@
 #include <thread>
 #include <unistd.h>
 
+#define ACK "ACK"
+#define ERR "ERR"
+
 using namespace std;
 
 string str_tolower(const string& s) {
@@ -20,6 +23,28 @@ string trim(const string& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
     size_t end = s.find_last_not_of(" \t\r\n");
     return (start == string::npos) ? "" : s.substr(start, end - start + 1);
+}
+
+bool handle_ack(int sock) {
+    char buffer[1024] = {0};
+    int bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0);
+    if (bytes_received <= 0) {
+        cerr << "[ACK_handler] Error receiving ACK/ERR from server.\n";
+        return false;
+    }
+    buffer[bytes_received] = '\0';
+    string response(buffer);
+
+    if (response.rfind(ACK, 0) == 0) {
+        // cout << "[ACK_handler] Operation successful (ACK received).\n";
+        return true;
+    } else if (response.rfind(ERR, 0) == 0) {
+        // cout << "[ACK_handler] Operation failed (ERR received).\n";
+        return false;
+    } else {
+        // cout << "[ACK_handler] Unexpected response from server: " << response << endl;
+        return false;
+    }
 }
 
 void send_message(int sock) {
@@ -55,9 +80,6 @@ void send_message(int sock) {
     } else {
         cout << "Message Sent To Server.\n";
     }
-
-    // TODO ACK|ERR empfangen und auswerten
-
 }
 
 void read_message(int sock,std::string& username, const std::string& index_str) {
@@ -101,12 +123,56 @@ void read_message(int sock,std::string& username, const std::string& index_str) 
     }
 
     // Antwort auswerten
-    if (response.rfind("OK|", 0) == 0) {
-        cout << "Mail gelesen:\n" << response.substr(3) << endl;
-    } else if (response.rfind("ERR|", 0) == 0) {
-        cerr << "Server Error: " << response.substr(4) << endl;
+    if (response.rfind(ERR, 0) == 0) {
+        cerr << "Server Error: " << response.substr(strlen(ERR)) << endl;
     } else {
-        cout << "Unbekannte Antwort vom Server:\n" << response << endl;
+        cout << "<< Message Content >>" << endl;
+        cout << response << endl;
+    }
+}
+
+bool handle_login(int sock, string& username) {
+    //TESTING PURPOSES ONLY - NO SECURITY
+    cout << "=== LOGIN CREDENTIALS ===" << endl;
+    cout << "Username: testuser" << endl;
+    cout << "Password: testpwd" << endl << endl;
+
+    string password;
+    cout << "Username: ";
+    getline(cin, username);
+    username = trim(username);
+    cout << "Password: ";
+    getline(cin, password);
+    password = trim(password);
+
+    // Username senden
+    if (send(sock, username.c_str(), username.size(), 0) == -1) {
+        cerr << "Error sending username.\n";
+        return false;
+    }
+
+    // Password senden
+    if (send(sock, password.c_str(), password.size(), 0) == -1) {
+        cerr << "Error sending password.\n";
+        return false;
+    }
+
+    // Server-Antwort empfangen
+    char buffer[1024] = {0};
+    int bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0);
+    if (bytes_received <= 0) {
+        cerr << "Error receiving server response.\n";
+        return false;
+    }
+    buffer[bytes_received] = '\0';
+    string response(buffer);
+
+    if (response.rfind(ACK, 0) == 0) {
+        cout << "Login successful!\n";
+        return true;
+    } else {
+        cout << "Login failed: " << response << endl;
+        return false;
     }
 }
 
@@ -130,20 +196,17 @@ void list_messages(int sock) {
     string response = buffer;
 
     // Fehlermeldung prüfen
-    if (response.rfind("ERR", 0) == 0) {
-        cerr << "Server Error: " << response.substr(4) << endl;
+    if (response.rfind(ERR, 0) == 0) {
+        cerr << "Server Error: " << response.substr(strlen(ERR)) << endl;
         return;
     }
 
-    // Wenn OK|n enthalten ist, n extrahieren
-    if (response.rfind("OK|", 0) == 0) {
-        size_t pos = response.find('\n');
-        if (pos == string::npos) pos = response.size();
-        string header = response.substr(0, pos);
+    // Wenn keine Fehlermeldung, dann Nachrichtenliste ausgeben
+    else {
         cout << "<< Available Messages >>"<< endl;
 
         // Rest (ab pos+1) enthält eigentliche Nachrichtenliste
-        string list = response.substr(pos + 1);
+        string list = response;
         if (list.empty()) {
             cout << "(No Messages available)"<< endl;
             return;
@@ -158,8 +221,6 @@ void list_messages(int sock) {
             if (end == string::npos) break;
             start = end + 1;
         }
-    } else {
-        cout << "Unexpected Response From Server: " << response << endl;
     }
 }
 
@@ -195,11 +256,11 @@ void delete_message(int sock, const std::string& username, const std::string& in
     buffer[bytes_received] = '\0';
     std::string response(buffer);
 
-    if (response.rfind("OK|", 0) == 0) {
-        std::cout << response.substr(3) << std::endl;
-    } else if (response.rfind("ERR|", 0) == 0) {
-        std::cerr << "Server Error: " << response.substr(4) << std::endl;
-    } else {
-        std::cout << "Unbekannte Antwort vom Server:\n" << response << std::endl;
+    if (response.rfind(ERR, 0) == 0) {
+        std::cerr << "Server Error: " << response.substr(strlen(ERR)) << std::endl;
+    }
+    else {
+        std::cout << "<< Server Response >>" << std::endl;
+        std::cout << response << std::endl;
     }
 }
