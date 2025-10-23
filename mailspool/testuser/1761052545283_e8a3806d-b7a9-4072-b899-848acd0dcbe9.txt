@@ -1,6 +1,0 @@
-Sender: testuser
-Recipient: testuser
-Subject: testsub
-Date: 21.10.2025 15:15:45
-Message:
-hallo philippe

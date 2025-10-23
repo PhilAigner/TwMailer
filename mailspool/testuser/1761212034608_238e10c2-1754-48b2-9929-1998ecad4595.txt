@@ -1,0 +1,6 @@
+Sender: testuser
+Recipient: testuser
+Subject: 123
+Date: 23.10.2025 11:33:54
+Message:
+123

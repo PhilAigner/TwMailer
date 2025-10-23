@@ -1,6 +1,0 @@
-Sender: testuser
-Recipient: 123
-Subject: 123
-Date: 17.10.2025 13:01:48
-Message:
-123
