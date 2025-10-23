@@ -156,7 +156,9 @@ string list_mails(const string& username) {
         }
 
         // Mails sortieren (optional nach Dateiname)
-        sort(mails.begin(), mails.end());
+        //sort(mails.begin(), mails.end());
+        // DARF MAN NICHT SORTIEREN, WEIL SONST INDEX NICHT STIMMT BEIM LÖSCHEN/LESEN!!!
+        // TODO sort immer (Datum) dann beim Lesen/delete auch danach sortieren
 
         // Indexierte Ausgabe
         for (size_t i = 0; i < mails.size(); ++i) {
@@ -195,16 +197,20 @@ string read_mail(const string& username, int index) {
             mail_files.push_back(entry.path());
     }
 
-    if (mail_files.empty()) return "ERR|No mails available";
+    if (mail_files.empty()) return string(ERR) + "No mails available";
+    
+    //sort so that index matches
+    sort(mail_files.begin(), mail_files.end());
+
 
     if (index < 1 || index > (int)mail_files.size())
-        return "ERR|Index out of range";
+        return string(ERR) + "Index out of range";
 
     fs::path target_file = mail_files[index - 1];
 
     // Mail aus Datei lesen
     ifstream ifs(target_file);
-    if (!ifs) return "ERR|Failed to open mail file";
+    if (!ifs) return string(ERR) + "Failed to open mail file";
 
     string line, sender, recipient, subject, date, message;
     bool in_message = false;
@@ -229,7 +235,7 @@ string read_mail(const string& username, int index) {
     oss << "Date: " << date << "\n";
     oss << "Message:\n" << message << "\n";
 
-    return "OK|" + oss.str();
+    return oss.str();
 }
 
 bool function_delete(int client_socket, char* buffer) {
@@ -280,6 +286,9 @@ bool function_delete(int client_socket, char* buffer) {
             user_mails.push_back(entry.path());
     }
 
+    //sort so that index matches
+    sort(user_mails.begin(), user_mails.end());
+
     if (mail_index > (int)user_mails.size()) {
         std::string err = string(ERR) + "Mail index out of range";
         send(client_socket, err.c_str(), err.size(), 0);
@@ -287,6 +296,13 @@ bool function_delete(int client_socket, char* buffer) {
     }
 
     // Datei löschen
+    cout << mail_index - 1 << endl;
+    cout << user_mails[mail_index - 1] << endl;
+    cout << user_mails.size() << endl;
+    for (const auto& mail : user_mails) {
+        std::cout << "Mail file: " << mail << std::endl;
+    }
+
     fs::path mail_to_delete = user_mails[mail_index - 1];
     std::error_code ec;
     fs::remove(mail_to_delete, ec);
