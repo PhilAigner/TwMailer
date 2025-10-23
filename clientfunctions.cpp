@@ -244,23 +244,5 @@ void delete_message(int sock, const std::string& username, const std::string& in
         return;
     }
 
-    // Antwort empfangen
-    const int BUFFER_SIZE = 4096;
-    char buffer[BUFFER_SIZE];
-    int bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
-    if (bytes_received <= 0) {
-        std::cerr << "Fehler beim Empfangen der Server-Antwort.\n";
-        return;
-    }
-
-    buffer[bytes_received] = '\0';
-    std::string response(buffer);
-
-    if (response.rfind(ERR, 0) == 0) {
-        std::cerr << "Server Error: " << response.substr(strlen(ERR)) << std::endl;
-    }
-    else {
-        std::cout << "<< Server Response >>" << std::endl;
-        std::cout << response << std::endl;
-    }
+    //ack handling is done in caller
 }

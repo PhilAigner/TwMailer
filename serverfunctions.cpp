@@ -297,8 +297,6 @@ bool function_delete(int client_socket, char* buffer) {
         return false;
     }
 
-    std::string ok = "Mail deleted successfully";
-    send(client_socket, ok.c_str(), ok.size(), 0);
     std::cout << "function_delete: deleted mail #" << mail_index << " for user '" << username << "'\n";
     return true;
 }

@@ -84,12 +84,12 @@ void user_input_thread(int sock) {
             }
             delete_message(sock, username, arg);
             res = handle_ack(sock);
-            /*
+            
             if (res) {
                 cout << "Message deleted successfully.\n";
             } else {
-                cout << "Failed to delete message.\n";
-            }*/
+                cout << "Server-error: Failed to delete message.\n";
+            }
         }
         else {
             cout << "Unknown command: " << command << endl;
