@@ -1,6 +1,7 @@
 CXX := g++
 CXXFLAGS := -c -Wall
 LDFLAGS := -luuid -pthread
+LIBS=-lldap -llber
 
 all: client server
 
@@ -8,7 +9,7 @@ client: client.o
 	$(CXX) client.o -o client
 
 server: server.o
-	$(CXX) server.o -o server $(LDFLAGS)
+	$(CXX) server.o -o server $(LDFLAGS) ${LIBS}
 
 client.o: client.cpp
 	$(CXX) $(CXXFLAGS) client.cpp

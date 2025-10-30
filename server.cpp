@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "serverfunctions.cpp"
+#include "ldap.cpp"
 
 // Konfigurationsvariablen
 #define SERVER_PORT 8080
