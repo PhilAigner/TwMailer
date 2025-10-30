@@ -16,6 +16,8 @@
 #define ACK "ACK"
 #define ERR "ERR"
 
+#include "ldap.cpp"
+
 using namespace std;
 
 struct User {
@@ -57,8 +59,13 @@ string str_tolower(const string& s) {
     return result;
 }
 
-bool validate_login(const std::string& username, const std::string& password) { //adapt after ldap-implementation
-    return username == test_user.username && password == test_user.password;
+int connect_ldap() {
+
+}
+
+bool validate_login(const std::string& username, const std::string& password) {
+    // TODO implement max 3 tries
+    return (ldap_login(username.c_str(), password.c_str()) == EXIT_SUCCESS);
 }
 
 // save_mail: saves `msg` for `username` under <BASE_DIR>/<username>/<uuid>.txt

@@ -9,6 +9,9 @@
 #define ACK "ACK"
 #define ERR "ERR"
 
+#include "mypw.cpp"
+
+
 using namespace std;
 
 string str_tolower(const string& s) {
@@ -141,8 +144,9 @@ bool handle_login(int sock, string& username) {
     cout << "Username: ";
     getline(cin, username);
     username = trim(username);
-    cout << "Password: ";
-    getline(cin, password);
+
+    //handle password input in separate function to hide input
+    password = getpass();
     password = trim(password);
 
     // Username senden

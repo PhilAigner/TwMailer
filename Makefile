@@ -1,21 +1,15 @@
 CXX := g++
-CXXFLAGS := -c -Wall
+CXXFLAGS := -Wall
 LDFLAGS := -luuid -pthread
-LIBS=-lldap -llber
+LIBS := -lldap -llber
 
 all: client server
 
-client: client.o
-	$(CXX) client.o -o client
+client: client.cpp clientfunctions.cpp mypw.cpp
+	$(CXX) $(CXXFLAGS) client.cpp -o client
 
-server: server.o
-	$(CXX) server.o -o server $(LDFLAGS) ${LIBS}
-
-client.o: client.cpp
-	$(CXX) $(CXXFLAGS) client.cpp
-
-server.o: server.cpp
-	$(CXX) $(CXXFLAGS) server.cpp
+server: server.cpp serverfunctions.cpp ldap.cpp
+	$(CXX) $(CXXFLAGS) server.cpp -o server $(LDFLAGS) $(LIBS)
 
 clean:
 	rm -f *.o client server

@@ -8,7 +8,7 @@
 #include <thread>
 
 #include "serverfunctions.cpp"
-#include "ldap.cpp"
+
 
 // Konfigurationsvariablen
 #define SERVER_PORT 8080
@@ -68,25 +68,25 @@ bool ack_handler(int client_socket, bool rtrn) {
     }
 }
 
-bool function_login(int client_socket) {
+string function_login(int client_socket) {
     string username, password;
 
-    // 1. Username vom Client empfangen
+    // 1. recv user from Client
     char buffer[256] = {0};
     int bytes_received = recv(client_socket, buffer, sizeof(buffer)-1, 0);
     if (bytes_received <= 0) {
         cerr << "function_login: failed to receive username\n";
-        return false;
+        return "";
     }
     buffer[bytes_received] = '\0';
     username = buffer;
 
-    // 2. Passwort vom Client empfangen
+    // 2. recv password from Client
     memset(buffer, 0, sizeof(buffer));
     bytes_received = recv(client_socket, buffer, sizeof(buffer)-1, 0);
     if (bytes_received <= 0) {
         cerr << "function_login: failed to receive password\n";
-        return false;
+        return "";
     }
     buffer[bytes_received] = '\0';
     password = buffer;
@@ -94,11 +94,11 @@ bool function_login(int client_socket) {
     // 3. Login prüfen
     if (validate_login(username, password)) {
         // ack handler handels response
-        return true;
+        return username;
     } else {
         std::cout << "Failed login attempt for user '" << username << "'.\n";
         // ack handler handels response
-        return false;
+        return "";
     }
 }
 
@@ -273,30 +273,18 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     bool logged_in = false;
     std::string username;
 
+
+
     while (!logged_in) {
-        memset(buffer, 0, BUFFER_SIZE);
-        bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0); // Username
-        if (bytes_received <= 0) break;
-        buffer[bytes_received] = '\0';
-        std::string user(buffer);
+        string result = function_login(client_socket);
 
-        memset(buffer, 0, BUFFER_SIZE);
-        bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0); // Password
-        if (bytes_received <= 0) break;
-        buffer[bytes_received] = '\0';
-        std::string pass(buffer);
-
-        if (validate_login(user, pass)) {
+        if (result.empty() == false) {
             logged_in = true;
-            username = user;
+            username = result;
             // ack handler handels response
-            ack_handler(client_socket, true);
             std::cout << "User Logged In: " << username << std::endl;
-        } else {
-            // ack handler handels response
-            ack_handler(client_socket, false);
-            std::cout << "Login Failed For: " << user << std::endl;
         }
+        ack_handler(client_socket, (!result.empty()));
     }
 
     if (!logged_in) {
@@ -407,6 +395,16 @@ int main(int argc, char* argv[]) {
     std::cout << "Server Started On " << SERVER_IP << ":" << port << endl;
     std::cout << "Mail-Spool-Directory: " << get_base_dir() << endl;
     std::cout << "Waiting For Connection..." << endl;
+
+    // 1. connect to ldap server
+    cout << "Trying to connect to LDAP server..." << endl;
+
+    // 1. try connect to ldap server
+    if (ldap_connect() != EXIT_SUCCESS) {
+        cerr << "function_login: LDAP connection failed\n";
+        return 1;
+    } else cout << "LDAP connection successful." << endl;
+
 
     while (true) {
         client_addr_size = sizeof(client_addr);
