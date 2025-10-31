@@ -13,7 +13,7 @@
 #include <algorithm>	
 #include <uuid/uuid.h>
 
-#define ACK "ACK"
+#define ACK "OK"
 #define ERR "ERR"
 
 #include "ldap.cpp"

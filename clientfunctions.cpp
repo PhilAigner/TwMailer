@@ -6,7 +6,7 @@
 #include <thread>
 #include <unistd.h>
 
-#define ACK "ACK"
+#define ACK "OK"
 #define ERR "ERR"
 
 #include "mypw.cpp"
