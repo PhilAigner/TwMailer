@@ -4,22 +4,24 @@
 #include <ldap.h>
 #include <iostream>
 
+//global ldap variables
 const char *ldapUri = "ldap://ldap.technikum-wien.at:389";
 const int ldapVersion = LDAP_VERSION3;
-
-//global variables
 int rc;
 LDAP *ldapHandle;
 
+using namespace std;
+
+//initializes connection to ldap server ( from example code in lecture )
 int ldap_connect()
 {
    rc = ldap_initialize(&ldapHandle, ldapUri);
    if (rc != LDAP_SUCCESS)
    {
-      fprintf(stderr, "ldap_init failed\n");
+      cerr << "ldap_init failed" << endl;
       return EXIT_FAILURE;
    }
-   printf("connected to LDAP server %s\n", ldapUri);
+   cout << "connected to LDAP server " << ldapUri << endl;
 
    rc = ldap_set_option(
        ldapHandle,
@@ -27,7 +29,7 @@ int ldap_connect()
        &ldapVersion);
    if (rc != LDAP_OPT_SUCCESS)
    {
-      fprintf(stderr, "ldap_set_option(PROTOCOL_VERSION): %s\n", ldap_err2string(rc));
+      cerr << "ldap_set_option(PROTOCOL_VERSION): " << ldap_err2string(rc) << endl;
       ldap_unbind_ext_s(ldapHandle, NULL, NULL);
       return EXIT_FAILURE;
    }
@@ -104,7 +106,9 @@ int ldap_login( const char *ldapBindUser, const char *ldapBindPassword ) {
       return EXIT_FAILURE;
    }
 
-   
+
+   // no more actions neccessary
+   // close ldap connection
 
    ////////////////////////////////////////////////////////////////////////////
    // https://linux.die.net/man/3/ldap_unbind_ext_s
