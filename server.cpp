@@ -278,7 +278,7 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
     while (!logged_in) {
         string result = function_login(client_socket);
 
-        if (result.empty() == false) {
+        if (!result.empty()) {
             logged_in = true;
             username = result;
             // ack handler handels response

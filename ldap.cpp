@@ -53,8 +53,6 @@ int ldap_login( const char *ldapBindUser, const char *ldapBindPassword ) {
    //    server should sort the search results before sending the results back
    //    to the client.
 
-   ldap_connect();
-
    rc = ldap_start_tls_s(
        ldapHandle,
        NULL,

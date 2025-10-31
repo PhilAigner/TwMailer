@@ -59,10 +59,6 @@ string str_tolower(const string& s) {
     return result;
 }
 
-int connect_ldap() {
-
-}
-
 bool validate_login(const std::string& username, const std::string& password) {
     // TODO implement max 3 tries
     return (ldap_login(username.c_str(), password.c_str()) == EXIT_SUCCESS);
