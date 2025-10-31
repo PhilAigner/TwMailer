@@ -15,7 +15,7 @@ string server_ip = "127.0.0.1";
 int server_port = 8080;
 
 string connected_msg = "connected";
-#define ACK "ACK"
+#define ACK "OK"
 #define ERR "ERR"
 
 bool login_success = false;
