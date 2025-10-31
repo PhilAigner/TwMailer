@@ -1,0 +1,7 @@
+Sender: testuser
+Recipient: if25b196
+Subject: testmail von testuser
+Date: 31.10.2025 10:54:49
+Message:
+test
+123
