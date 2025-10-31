@@ -6,9 +6,9 @@
 #include <arpa/inet.h>
 #include <signal.h>
 #include <thread>
+#include <fcntl.h>
 
 #include "serverfunctions.cpp"
-
 
 // Konfigurationsvariablen
 #define SERVER_PORT 8080
@@ -22,7 +22,7 @@
 
 int server_socket; // Globale Variable für sauberes Beenden bei Signalen
 
-// Funktion zum sicheren Senden aller Daten
+// Funktion zum sicheren Senden aller Daten ( von lecture notes )
 int sendall(int socket, const char *buffer, size_t length) {
     size_t total_sent = 0;
     size_t bytes_left = length;
@@ -68,6 +68,8 @@ bool ack_handler(int client_socket, bool rtrn) {
     }
 }
 
+// login handler function
+// returns username if successful, empty string if not
 string function_login(int client_socket) {
     string username, password;
 
@@ -113,7 +115,7 @@ bool function_send(char* buffer, string username) {
     return rtrn;
 }
 
-//simplified for basic hand-in, return all messages
+// list all messages of user
 bool function_list(int client_socket, const std::string& username) {
     std::cout << "LIST Function Called" << std::endl;
 
@@ -285,6 +287,17 @@ void handle_client(int client_socket, sockaddr_in client_addr) {
             std::cout << "User Logged In: " << username << std::endl;
         }
         ack_handler(client_socket, (!result.empty()));
+        
+        // If login failed, flush any remaining data in the socket buffer
+        if (!logged_in) {
+            char flush_buffer[1024];
+            int flags = fcntl(client_socket, F_GETFL, 0);
+            fcntl(client_socket, F_SETFL, flags | O_NONBLOCK); // Set non-blocking
+            while (recv(client_socket, flush_buffer, sizeof(flush_buffer), 0) > 0) {
+                // Flush buffer
+            }
+            fcntl(client_socket, F_SETFL, flags); // Restore original flags
+        }
     }
 
     if (!logged_in) {
@@ -401,7 +414,7 @@ int main(int argc, char* argv[]) {
 
     // 1. try connect to ldap server
     if (ldap_connect() != EXIT_SUCCESS) {
-        cerr << "function_login: LDAP connection failed\n";
+        cerr << "LDAP connection failed" << endl;
         return 1;
     } else cout << "LDAP connection successful." << endl;
 

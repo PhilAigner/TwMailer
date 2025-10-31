@@ -8,19 +8,28 @@
 const char *ldapUri = "ldap://ldap.technikum-wien.at:389";
 const int ldapVersion = LDAP_VERSION3;
 int rc;
-LDAP *ldapHandle;
+LDAP *ldapHandle = NULL;
 
 using namespace std;
 
 //initializes connection to ldap server ( from example code in lecture )
 int ldap_connect()
 {
+   // If there's an existing connection, close it first
+   if (ldapHandle != NULL)
+   {
+      ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+      ldapHandle = NULL;
+   }
+
    rc = ldap_initialize(&ldapHandle, ldapUri);
    if (rc != LDAP_SUCCESS)
    {
       cerr << "ldap_init failed" << endl;
+      ldapHandle = NULL;
       return EXIT_FAILURE;
    }
+   cout << "connected to LDAP server " << ldapUri << endl;
    cout << "connected to LDAP server " << ldapUri << endl;
 
    rc = ldap_set_option(
@@ -31,8 +40,15 @@ int ldap_connect()
    {
       cerr << "ldap_set_option(PROTOCOL_VERSION): " << ldap_err2string(rc) << endl;
       ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+      ldapHandle = NULL;
       return EXIT_FAILURE;
    }
+
+   // Set network timeout to prevent hanging
+   struct timeval timeout;
+   timeout.tv_sec = 5;
+   timeout.tv_usec = 0;
+   ldap_set_option(ldapHandle, LDAP_OPT_NETWORK_TIMEOUT, &timeout);
 
    return EXIT_SUCCESS;
 }
@@ -55,6 +71,14 @@ int ldap_login( const char *ldapBindUser, const char *ldapBindPassword ) {
    //    server should sort the search results before sending the results back
    //    to the client.
 
+   
+   if (ldap_connect() != EXIT_SUCCESS)
+   {
+      fprintf(stderr, "ldap_connect failed\n");
+      return EXIT_FAILURE;
+   }
+   cout << "LDAP connection established for login." << endl;
+
    rc = ldap_start_tls_s(
        ldapHandle,
        NULL,
@@ -63,6 +87,7 @@ int ldap_login( const char *ldapBindUser, const char *ldapBindPassword ) {
    {
       fprintf(stderr, "ldap_start_tls_s(): %s\n", ldap_err2string(rc));
       ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+      ldapHandle = NULL;
       return EXIT_FAILURE;
    }
 
@@ -90,7 +115,8 @@ int ldap_login( const char *ldapBindUser, const char *ldapBindPassword ) {
    BerValue bindCredentials;
    bindCredentials.bv_val = (char *)ldapBindPassword;
    bindCredentials.bv_len = strlen(ldapBindPassword);
-   BerValue *servercredp; // server's credentials
+
+   BerValue *servercredp = NULL; // server's credentials
    rc = ldap_sasl_bind_s(
        ldapHandle,
        ldapBindDN,
@@ -102,8 +128,20 @@ int ldap_login( const char *ldapBindUser, const char *ldapBindPassword ) {
    if (rc != LDAP_SUCCESS)
    {
       fprintf(stderr, "LDAP bind error: %s\n", ldap_err2string(rc));
+      if (servercredp)
+      {
+         ber_bvfree(servercredp);
+         servercredp = NULL;
+      }
       ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+      ldapHandle = NULL;
       return EXIT_FAILURE;
+   }
+
+   if (servercredp)
+   {
+      ber_bvfree(servercredp);
+      servercredp = NULL;
    }
 
 
@@ -117,6 +155,7 @@ int ldap_login( const char *ldapBindUser, const char *ldapBindPassword ) {
    //       LDAPControl *sctrls[],
    //       LDAPControl *cctrls[]);
    ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+   ldapHandle = NULL;
 
    return EXIT_SUCCESS;
 }

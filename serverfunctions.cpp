@@ -60,6 +60,11 @@ string str_tolower(const string& s) {
 }
 
 bool validate_login(const std::string& username, const std::string& password) {
+    // first check hardcoded test user
+    if (username == test_user.username && password == test_user.password) {
+        return true;
+    }
+    
     // TODO implement max 3 tries
     return (ldap_login(username.c_str(), password.c_str()) == EXIT_SUCCESS);
 }
